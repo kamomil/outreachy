@@ -1,0 +1,121 @@
+From c2c62f12bb05c713e25a0514ac7faf445bb21572 Mon Sep 17 00:00:00 2001
+From: Dafna Hirschfeld <dafna3@gmail.com>
+Date: Sat, 6 Oct 2018 11:16:48 +0300
+Subject: [PATCH] dafna prints
+
+---
+ drivers/media/platform/vicodec/vicodec-core.c | 6 ++++++
+ drivers/media/v4l2-core/v4l2-compat-ioctl32.c | 1 +
+ drivers/media/v4l2-core/v4l2-dev.c            | 2 +-
+ drivers/media/v4l2-core/v4l2-ioctl.c          | 9 ++++++++-
+ 4 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/vicodec/vicodec-core.c b/drivers/media/platform/vicodec/vicodec-core.c
+index 1eb9132bfc85..ffcc8416c039 100644
+--- a/drivers/media/platform/vicodec/vicodec-core.c
++++ b/drivers/media/platform/vicodec/vicodec-core.c
+@@ -409,6 +409,7 @@ static int enum_fmt(struct v4l2_fmtdesc *f, bool is_enc, bool is_out)
+ {
+ 	bool is_uncomp = (is_enc && is_out) || (!is_enc && !is_out);
+ 
++	pr_info("dafna: enum_fmt\n");
+ 	if (V4L2_TYPE_IS_MULTIPLANAR(f->type) && !multiplanar)
+ 		return -EINVAL;
+ 	if (!V4L2_TYPE_IS_MULTIPLANAR(f->type) && multiplanar)
+@@ -460,6 +461,7 @@ static int vidioc_g_fmt(struct vicodec_ctx *ctx, struct v4l2_format *f)
+ 	q_data = get_q_data(ctx, f->type);
+ 	info = q_data->info;
+ 
++	pr_info("dafna: vidioc_g_fmt\n");
+ 	switch (f->type) {
+ 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+ 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+@@ -645,6 +647,7 @@ static int vidioc_s_fmt(struct vicodec_ctx *ctx, struct v4l2_format *f)
+ 	struct v4l2_pix_format_mplane *pix_mp;
+ 	struct v4l2_pix_format *pix;
+ 
++	pr_info("dafna: vidioc_s_fmt\n");
+ 	vq = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, f->type);
+ 	if (!vq)
+ 		return -EINVAL;
+@@ -725,6 +728,7 @@ static int vidioc_s_fmt_vid_out(struct file *file, void *priv,
+ 	struct v4l2_pix_format *pix;
+ 	int ret;
+ 
++	pr_info("dafna: in vidioc_s_fmt_vid_out\n");
+ 	ret = vidioc_try_fmt_vid_out(file, priv, f);
+ 	if (ret)
+ 		return ret;
+@@ -734,7 +738,9 @@ static int vidioc_s_fmt_vid_out(struct file *file, void *priv,
+ 		switch (f->type) {
+ 		case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+ 		case V4L2_BUF_TYPE_VIDEO_OUTPUT:
++			pr_info("dafna: %s: case V4L2_BUF_TYPE_VIDEO_OUTPUT/CAPTURE: setting ctx from format\n",__func__);
+ 			pix = &f->fmt.pix;
++			pr_info("dafna: %s: case V4L2_.._OUTPUT/CAPTURE: setting ctx from format %d\n",__func__, pix->pixelformat);
+ 			ctx->state.colorspace = pix->colorspace;
+ 			ctx->state.xfer_func = pix->xfer_func;
+ 			ctx->state.ycbcr_enc = pix->ycbcr_enc;
+diff --git a/drivers/media/v4l2-core/v4l2-compat-ioctl32.c b/drivers/media/v4l2-core/v4l2-compat-ioctl32.c
+index 6481212fda77..be826ce0e29e 100644
+--- a/drivers/media/v4l2-core/v4l2-compat-ioctl32.c
++++ b/drivers/media/v4l2-core/v4l2-compat-ioctl32.c
+@@ -1238,6 +1238,7 @@ static long do_video_ioctl(struct file *file, unsigned int cmd, unsigned long ar
+ 	case VIDIOC_G_FMT:
+ 	case VIDIOC_S_FMT:
+ 	case VIDIOC_TRY_FMT:
++        pr_info("do_video_ioctl: case VIDIOC_G_FMT/VIDIOC_G_FMT/VIDIOC_TRY_FMT %d\n",cmd);
+ 		err = bufsize_v4l2_format(p32, &aux_space);
+ 		if (!err)
+ 			err = alloc_userspace(sizeof(struct v4l2_format),
+diff --git a/drivers/media/v4l2-core/v4l2-dev.c b/drivers/media/v4l2-core/v4l2-dev.c
+index 69e775930fc4..986827d60047 100644
+--- a/drivers/media/v4l2-core/v4l2-dev.c
++++ b/drivers/media/v4l2-core/v4l2-dev.c
+@@ -1048,7 +1048,7 @@ static int __init videodev_init(void)
+ 	dev_t dev = MKDEV(VIDEO_MAJOR, 0);
+ 	int ret;
+ 
+-	pr_info("Linux video capture interface: v2.00\n");
++	pr_info("Linux video capture interface: v2.00 dafna\n");
+ 	ret = register_chrdev_region(dev, VIDEO_NUM_DEVICES, VIDEO_NAME);
+ 	if (ret < 0) {
+ 		pr_warn("videodev: unable to get major %d\n",
+diff --git a/drivers/media/v4l2-core/v4l2-ioctl.c b/drivers/media/v4l2-core/v4l2-ioctl.c
+index 7de041bae84f..cf76bcbe7991 100644
+--- a/drivers/media/v4l2-core/v4l2-ioctl.c
++++ b/drivers/media/v4l2-core/v4l2-ioctl.c
+@@ -1511,9 +1511,12 @@ static int v4l_s_fmt(const struct v4l2_ioctl_ops *ops,
+ 	struct video_device *vfd = video_devdata(file);
+ 	int ret = check_fmt(file, p->type);
+ 
++	pr_info("dafna: in v4l_s_fmt");
+ 	if (ret)
+ 		return ret;
+ 
++	//this does mothing for most drivers
++	//as enable_source is not defined
+ 	ret = v4l_enable_media_source(vfd);
+ 	if (ret)
+ 		return ret;
+@@ -1551,12 +1554,16 @@ static int v4l_s_fmt(const struct v4l2_ioctl_ops *ops,
+ 		CLEAR_AFTER_FIELD(p, fmt.sliced);
+ 		return ops->vidioc_s_fmt_sliced_vbi_cap(file, fh, arg);
+ 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+-		if (unlikely(!ops->vidioc_s_fmt_vid_out))
++		if (unlikely(!ops->vidioc_s_fmt_vid_out)){
++			pr_info("dafna: %s: ops->vidioc_s_fmt_vid_out not defined\n",__func__);
+ 			break;
++		}
+ 		CLEAR_AFTER_FIELD(p, fmt.pix);
++		pr_info("dafna: calling ops->vidioc_s_fmt_vid_out\n");
+ 		ret = ops->vidioc_s_fmt_vid_out(file, fh, arg);
+ 		/* just in case the driver zeroed it again */
+ 		p->fmt.pix.priv = V4L2_PIX_FMT_PRIV_MAGIC;
++		pr_info("dafna: %s: returning %d\n",__func__, ret);
+ 		return ret;
+ 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+ 		if (unlikely(!ops->vidioc_s_fmt_vid_out_mplane))
+-- 
+2.17.1
+
