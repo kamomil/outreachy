@@ -48,6 +48,8 @@ struct buffer *prepare_buffers(int fd, int type)
         req.count = N_BUFS;
         req.type = type;
         req.memory = V4L2_MEMORY_MMAP;
+        //handled by v4l_reqbufs
+        //Initiate Memory Mapping, User Pointer I/O or DMA buffer I/O
         int ret = ioctl(fd, VIDIOC_REQBUFS, &req);
         if(ret){
           perror("ioctl VIDIOC_REQBUFS");
@@ -71,6 +73,7 @@ struct buffer *prepare_buffers(int fd, int type)
                 buf.memory      = V4L2_MEMORY_MMAP;
                 buf.index       = n_buffers;
 
+                //VIDIOC_QUERYBUF - Query the status of a buffer
                 ret = ioctl(fd, VIDIOC_QUERYBUF, &buf);
                 if(ret){
                   perror("ioctl VIDIOC_QUERYBUF");
@@ -132,6 +135,7 @@ void recv_frames(int fd, struct buffer *buffers)
                 if (buf.flags & V4L2_BUF_FLAG_LAST)
                         break;
 
+                //VIDIOC_QBUF - VIDIOC_DQBUF - Exchange a buffer with the driver
                 int ret = ioctl(fd, VIDIOC_QBUF, &buf);
                 if(ret){
                   perror("recv_frames: ioctl VIDIOC_QBUF");
@@ -194,11 +198,17 @@ int main(int argc, char **argv)
         enum v4l2_buf_type              type;
         int                             fd = -1;
         unsigned int                    i;
-        char                            *dev_name = "/dev/video3";
+        char                            *dev_name = NULL;
         struct buffer                   *buffers_cap;
         struct buffer                   *buffers_out;
 
-        fd = open(dev_name, O_RDWR | O_NONBLOCK, 0);
+        if (argc < 2) {
+		printf("Missing dev-file\n");
+		printf("`dev-file` is the name of the vicodec device file, e.g. /dev/video1\n"); 
+		exit(EXIT_FAILURE);
+	}
+	dev_name = argv[1];
+	fd = open(dev_name, O_RDWR | O_NONBLOCK, 0);
         if (fd < 0) {
                 perror("Cannot open device");
                 exit(EXIT_FAILURE);
@@ -239,6 +249,8 @@ int main(int argc, char **argv)
 
         if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB24) {
                 printf("Driver didn't accept RGB24 format. Can't proceed.\n");
+                printf("fmt.fmt.pix.pixelformat: %d\n",fmt.fmt.pix.pixelformat);
+                printf("V4L2_PIX_FMT_RGB24 = %d\n",V4L2_PIX_FMT_RGB24);
                 exit(EXIT_FAILURE);
         }
         if ((fmt.fmt.pix.width != WIDTH) || (fmt.fmt.pix.height != HEIGHT))
