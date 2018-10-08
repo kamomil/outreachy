@@ -201,7 +201,7 @@ int main(int argc, char **argv)
         char                            *dev_name = NULL;
         struct buffer                   *buffers_cap;
         struct buffer                   *buffers_out;
-
+        int ret = 0;
         if (argc < 2) {
 		printf("Missing dev-file\n");
 		printf("`dev-file` is the name of the vicodec device file, e.g. /dev/video1\n"); 
@@ -219,7 +219,7 @@ int main(int argc, char **argv)
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
         fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
         //handled by v4l_s_fmt in v4l2-ioctl.c
-        int ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
+        ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl - try other /dev/video* file");
           return -1;
