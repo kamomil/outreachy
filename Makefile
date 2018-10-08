@@ -1,6 +1,6 @@
 CFLAGS=-Wall
 
-target = v4l2-decode
+target = v4l2-decode v4l2-encode
 
 all: $(target)
 
