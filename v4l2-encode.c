@@ -57,7 +57,7 @@ struct buffer *prepare_buffers(int fd, int type)
 
         }
         else{
-          printf("ioctl VIDIOC_REQBUFS was ok, ask for %d buffers\n",req.count);
+          printf("ioctl VIDIOC_REQBUFS for type %d was ok, ask for %d buffers\n",type, req.count);
         }
         if (req.count != N_BUFS) {
                 perror("this app requires different number of buffers");
@@ -156,8 +156,8 @@ void send_frames(int fd, struct buffer *buffers)
         struct v4l2_encoder_cmd         enc;
 
         for (i = 0; i < N_BUFS; i++) {
-                
-		sprintf(out_name, "raw%03d.ppm", i);
+
+                sprintf(out_name, "raw%03d.ppm", i);
                 fout = fopen(out_name, "r");
                 if (!fout) {
                         perror("Cannot open image");
@@ -170,8 +170,8 @@ void send_frames(int fd, struct buffer *buffers)
 
 		fread(buffers[i].start, 1, 15, fout);//skip the header
                 CLEAR(buf);
-                printf("send_frames: copying %ld bytes from %s\n",numbytes,out_name);
                 buf.bytesused = fread(buffers[i].start, 1, numbytes, fout);
+                printf("send_frames: copying %ld bytes from %s, first byte is 0x%02x\n",numbytes,out_name,  *((unsigned char*)buffers[i].start));
                 fclose(fout);
 
                 buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -185,10 +185,10 @@ void send_frames(int fd, struct buffer *buffers)
 
         }
         CLEAR(enc);
-        enc.cmd = V4L2_DEC_CMD_STOP;
-        int ret = ioctl(fd, VIDIOC_DECODER_CMD, &enc);
+        enc.cmd = V4L2_ENC_CMD_STOP;
+        int ret = ioctl(fd, VIDIOC_ENCODER_CMD, &enc);
         if(ret){
-          perror("ioctl VIDIOC_DECODER_CMD");
+          perror("ioctl VIDIOC_ENCODER_CMD");
           exit(EXIT_FAILURE);
 
         }
