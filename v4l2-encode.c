@@ -1,5 +1,6 @@
-/* V4L2 video decoder
-   Copyright (C) 2018 Helen Koike <helen.koike@collabora.com>
+/* V4L2 video encoder
+   Copyright (C) 2018 Helen Koike <helen.koike@collabora.com>,
+                      Dafna Hirschfeld <dafna3@gmail.com>
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -237,13 +238,16 @@ int main(int argc, char **argv)
         struct buffer                   *buffers_cap;
         struct buffer                   *buffers_out;
         int ret = 0;
-    if (argc < 2) {
-		printf("Missing dev-file\n");
-		printf("`dev-file` is the name of the vicodec device file, e.g. /dev/video1\n"); 
-		exit(EXIT_FAILURE);
-	}
-	dev_name = argv[1];
-	fd = open(dev_name, O_RDWR | O_NONBLOCK, 0);
+
+        if (argc < 2) {
+                printf("usage: %s dev_file\n", argv[0]);
+                printf("'dev_file' is the name of the vicodec device file, e.g. /dev/video1\n");
+                exit(EXIT_FAILURE);
+        }
+        dev_name = argv[1];
+
+
+        fd = open(dev_name, O_RDWR | O_NONBLOCK, 0);
         if (fd < 0) {
                 perror("Cannot open device");
                 exit(EXIT_FAILURE);
