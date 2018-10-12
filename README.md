@@ -4,7 +4,7 @@
 
 * `0001-dafna-prints.patch` debug prints patch
 
-#### Video4linux2
+## Video4linux2
 
 
 I encountered problems compiling the v4l-utils program.
@@ -42,5 +42,65 @@ Uvcvideo is the module that creates the /dev/video0  /dev/video1, so removing it
 But it is needed to remove it in order to reinstall videodev since uvcvideo depends on it
 
 
-========================
+### Add support for a new pixel format to vicodec
 
+```
+struct v4l2_fwht_pixfmt_info {
+        u32 id;
+        //used to calc `pix->bytesperline = q_data->width * info->bytesperline_mult;`
+        unsigned int bytesperline_mult;
+        //used to calculate the `pix->sizeimage` in the function `vidioc_try_fmt`, pix is pixel format from the uapi
+        //also set `ctx->q_data[V4L2_M2M_SRC].sizeimage` in `vicodec_open`
+        unsigned int sizeimage_mult;
+        unsigned int sizeimage_div;
+        
+        unsigned int luma_step; //param `input_step` for the `encode_plane` func in ./codec-fwht.c
+        unsigned int chroma_step; ///param `input_step` for the `encode_plane` func in ./codec-fwht.c
+        /* Chroma plane subsampling */
+        unsigned int width_div;
+        unsigned int height_div;
+};
+```
+
+From the uapi:
+
+```
+/*
+ *	V I D E O   I M A G E   F O R M A T
+ */
+struct v4l2_pix_format {
+	__u32			width;
+	__u32			height;
+	__u32			pixelformat;
+	__u32			field;		/* enum v4l2_field */
+	__u32			bytesperline;	/* for padding, zero if unused */
+	__u32			sizeimage;
+	__u32			colorspace;	/* enum v4l2_colorspace */
+	__u32			priv;		/* private data, depends on pixelformat */
+	__u32			flags;		/* format flags (V4L2_PIX_FMT_FLAG_*) */
+	union {
+		/* enum v4l2_ycbcr_encoding */
+		__u32			ycbcr_enc;
+		/* enum v4l2_hsv_encoding */
+		__u32			hsv_enc;
+	};
+	__u32			quantization;	/* enum v4l2_quantization */
+	__u32			xfer_func;	/* enum v4l2_xfer_func */
+};
+```
+and in vicodec-core.c:
+This struct does not seem to be used
+```
+struct pixfmt_info {
+        u32 id;
+        unsigned int bytesperline_mult;
+        unsigned int sizeimage_mult;
+        unsigned int sizeimage_div;
+        unsigned int luma_step;
+        unsigned int chroma_step;
+        /* Chroma plane subsampling */
+        unsigned int width_div;
+        unsigned int height_div;
+};
+
+```
