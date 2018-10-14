@@ -1,3 +1,7 @@
+* for dynamic debug , as root:
+```
+echo "file codec-fwht.c line 1- +p" > /sys/kernel/debug/dynamic_debug/control
+```
 * `v4l2-decode.c` is from https://gitlab.collabora.com/koike/v4l2-codec.git
 
 * constantly keep dmesg logs: `tail -f /var/log/kern.log`
@@ -102,5 +106,9 @@ struct pixfmt_info {
         unsigned int width_div;
         unsigned int height_div;
 };
+
+```
+
+```
 
 ```
