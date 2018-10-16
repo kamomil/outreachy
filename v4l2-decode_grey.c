@@ -1,7 +1,6 @@
-/* V4L2 video encoder
+/* V4L2 video decoder
    Copyright (C) 2018 Helen Koike <helen.koike@collabora.com>,
-                      Dafna Hirschfeld <dafna3@gmail.com>
-
+		Dafna Hirschfeld <dafna3@gmail.com>
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation version 2 of the License.
@@ -56,7 +55,7 @@ struct buffer *prepare_buffers(int fd, int type)
 
         }
         else{
-          printf("ioctl VIDIOC_REQBUFS for type %d was ok, ask for %d buffers\n",type, req.count);
+          printf("ioctl VIDIOC_REQBUFS was ok, ask for %d buffers\n",req.count);
         }
         if (req.count != 1) {
                 perror("this app requires different number of buffers");
@@ -117,12 +116,12 @@ void recv_frames(int fd, struct buffer *buffers)
                 ioctl(fd, VIDIOC_DQBUF, &buf);
 
 
-                fcap = fopen("lena_grey.wfht", "w");
+                fcap = fopen("lena_grey.ppm", "w");
                 if (!fcap) {
                         perror("Cannot open image");
                         exit(EXIT_FAILURE);
                 }
-                //fprintf(fcap, "P6\n%d %d 255\n", WIDTH, HEIGHT);
+                fprintf(fcap, "P6\n%d %d 255\n", WIDTH, HEIGHT);
                 fwrite(buffers[buf.index].start, buf.bytesused, 1, fcap);
                 fclose(fcap);
 
@@ -148,7 +147,7 @@ void send_frames(int fd, struct buffer *buffer)
         struct v4l2_encoder_cmd         enc;
         int ret;
 
-        out_name = "lena_gray.raw";
+        out_name = "lena_grey.wfht";
         fout = fopen(out_name, "r");
         if (!fout) {
           perror("Cannot open image");
@@ -161,8 +160,8 @@ void send_frames(int fd, struct buffer *buffer)
 
 
         CLEAR(buf);
+        printf("send_frames: copying %ld bytes from %s\n",numbytes,out_name);
         buf.bytesused = fread(buffer[0].start, 1, numbytes, fout);
-        printf("send_frames: copying %ld bytes from %s, first byte is 0x%02x\n",numbytes,out_name,  *((unsigned char*)buffer[0].start));
         fclose(fout);
 
         buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -174,47 +173,14 @@ void send_frames(int fd, struct buffer *buffer)
           exit(EXIT_FAILURE);
         }
 
-
         CLEAR(enc);
-        enc.cmd = V4L2_ENC_CMD_STOP;
-        ret = ioctl(fd, VIDIOC_ENCODER_CMD, &enc);
+        enc.cmd = V4L2_DEC_CMD_STOP;
+        ret = ioctl(fd, VIDIOC_DECODER_CMD, &enc);
         if(ret){
-          perror("ioctl VIDIOC_ENCODER_CMD");
+          perror("ioctl VIDIOC_DECODER_CMD");
           exit(EXIT_FAILURE);
 
         }
-
-}
-
-/*
-  struct v4l2_format {
-  __u32	 type;
-  union {
-  struct v4l2_pix_format		pix;     // V4L2_BUF_TYPE_VIDEO_CAPTURE
-  struct v4l2_pix_format_mplane	pix_mp;  // V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
-  struct v4l2_window		win;     // V4L2_BUF_TYPE_VIDEO_OVERLAY
-  struct v4l2_vbi_format		vbi;     // V4L2_BUF_TYPE_VBI_CAPTURE
-  struct v4l2_sliced_vbi_format	sliced;  // V4L2_BUF_TYPE_SLICED_VBI_CAPTURE
-  struct v4l2_sdr_format		sdr;     // V4L2_BUF_TYPE_SDR_CAPTURE
-  struct v4l2_meta_format		meta;    // V4L2_BUF_TYPE_META_CAPTURE
-  __u8	raw_data[200];                   // user-defined
-  } fmt;
-};
-
-
- */
-
-void print_cap(struct v4l2_capability vcap) {
-
-  printf("driver = %s\n",vcap.driver);
-  printf("device = %s\n",vcap.card);
-  printf("bus_info = %s\n",vcap.bus_info);
-  printf("version = %u.%u.%u\n",(vcap.version >> 16) & 0xFF, (vcap.version >> 8) & 0xFF, vcap.version & 0xFF);
-//vicodec returns: 0x84208000
-//this is V4L2_CAP_VIDEO_M2M_MPLANE|V4L2_CAP_EXT_PIX_FORMAT|V4L2_CAP_STREAMING|V4L2_CAP_DEVICE_CAPS
-  printf("capabilities = 0x%08x\n",vcap.capabilities);
-  printf("device_caps  = 0x%08x\n",vcap.device_caps);
-  
 
 }
 
@@ -242,58 +208,50 @@ int main(int argc, char **argv)
                 exit(EXIT_FAILURE);
         }
 
-        struct v4l2_capability vicodec_cap;
-        CLEAR(vicodec_cap);
-        ret = ioctl(fd, VIDIOC_QUERYCAP, &vicodec_cap);
-        if(ret){
-          perror("ioctl - try other /dev/video* file");
-          return -1;
-        }
-        print_cap(vicodec_cap);
         /* Set formats in capture and output */
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-        fmt.fmt.pix.width       = WIDTH;
-        fmt.fmt.pix.height      = HEIGHT;
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
-        fmt.fmt.pix.colorspace  = V4L2_COLORSPACE_RAW;
+        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
         //handled by v4l_s_fmt in v4l2-ioctl.c
         ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl - try other /dev/video* file");
           return -1;
         }
-        
-        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_GREY) {
-          printf("Driver didn't accept GREY format. Can't proceed.\n");
+        else{
+          printf("ioctl VIDIOC_S_FMT was ok\n");
+        }
+        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_FWHT) {
+          printf("Driver didn't accept FWHT format. Can't proceed.\n");
           printf("fmt.fmt.pix.pixelformat: %d\n",fmt.fmt.pix.pixelformat);
-          printf("V4L2_PIX_FMT_GREY = %d\n",V4L2_PIX_FMT_GREY);
+          printf("V4L2_BUF_TYPE_VIDEO_OUTPUT = %d\n",V4L2_BUF_TYPE_VIDEO_OUTPUT);
           exit(EXIT_FAILURE);
         }
-	if ((fmt.fmt.pix.width != WIDTH) || (fmt.fmt.pix.height != HEIGHT))
-                printf("Warning: driver is sending image at %dx%d\n",
-                        fmt.fmt.pix.width, fmt.fmt.pix.height);
-
 
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
+        fmt.fmt.pix.width       = WIDTH;
+        fmt.fmt.pix.height      = HEIGHT;
+        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
+        fmt.fmt.pix.colorspace  = V4L2_COLORSPACE_RAW;
         ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl VIDIOC_S_FMT");
           exit(EXIT_FAILURE);
         }
 
-        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_FWHT) {
-                printf("Driver didn't accept FWHT format. Can't proceed.\n");
+        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_GREY) {
+                printf("Driver didn't accept GREY format. Can't proceed.\n");
                 printf("fmt.fmt.pix.pixelformat: %d\n",fmt.fmt.pix.pixelformat);
-                printf("V4L2_PIX_FMT_FWHT = %d\n",V4L2_PIX_FMT_FWHT);
+                printf("V4L2_PIX_FMT_GREY = %d\n",V4L2_PIX_FMT_GREY);
                 exit(EXIT_FAILURE);
         }
-        
+        if ((fmt.fmt.pix.width != WIDTH) || (fmt.fmt.pix.height != HEIGHT))
+                printf("Warning: driver is sending image at %dx%d\n",
+                        fmt.fmt.pix.width, fmt.fmt.pix.height);
 
         /* Allocate buffers in capture and output */
-        buffers_out = prepare_buffers(fd, V4L2_BUF_TYPE_VIDEO_OUTPUT);//our output are the ppm files
+        buffers_out = prepare_buffers(fd, V4L2_BUF_TYPE_VIDEO_OUTPUT);
         buffers_cap = prepare_buffers(fd, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 
         /* Start streaming */
