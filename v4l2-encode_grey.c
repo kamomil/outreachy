@@ -122,7 +122,6 @@ void recv_frames(int fd, struct buffer *buffers)
                         perror("Cannot open image");
                         exit(EXIT_FAILURE);
                 }
-                //fprintf(fcap, "P6\n%d %d 255\n", WIDTH, HEIGHT);
                 fwrite(buffers[buf.index].start, buf.bytesused, 1, fcap);
                 fclose(fcap);
 

@@ -1,4 +1,30 @@
-* for dynamic debug , as root:
+## encoding-decoding greyscale
+
+* to media tree , master, commit 8caec72e8cbff65afa38928197bea5a393b67975
+
+* I frist added the patches of debug prints: 0001-dafna-prints.patch
+
+* So, `git am 0001-dafna-prints.patch`
+
+* Then, a silly patch to support greyscale: `git am 0001-support-gryscale-basic.patch` 
+
+* compile and install the kernel and modules
+
+* `sudo modprobe vicodec`
+
+* generate raw greyscale 640x480 image called "lena_grey640_480.ppm.raw" `./generate_lena_raw_grey640x480.sh`
+
+* to encode the image: `./v4l2-encode640x480_grey <encoder dev file>`
+
+* to decode back to the original: `./v4l2-decode640x480_grey <decoder dev file>`
+
+* to plot a raw decoded greyscale image: `python3 plot_raw_grey_img.py <img> <width> <height>`
+
+* for example `python3 plot_raw_grey_img.py lena_grey.raw 640 480`
+
+
+for dynamic debug , as root:
+
 ```
 echo "file codec-fwht.c line 1- +p" > /sys/kernel/debug/dynamic_debug/control
 ```
