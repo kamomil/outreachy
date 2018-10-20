@@ -1,0 +1,203 @@
+struct v4l2_fh
+==============
+defined in ./include/media/v4l2-fh.h
+struct v4l2_fh {
+        struct list_head        list;
+        struct video_device     *vdev;
+        struct v4l2_ctrl_handler *ctrl_handler;
+        enum v4l2_priority      prio;
+
+        /* Events */
+        wait_queue_head_t       wait;
+        struct list_head        subscribed;
+        struct list_head        available;
+        unsigned int            navailable;
+        u32                     sequence;
+
+#if IS_ENABLED(CONFIG_V4L2_MEM2MEM_DEV)
+        struct v4l2_m2m_ctx     *m2m_ctx;
+#endif
+};
+
+====================
+struct v4l2_m2m_ctx 
+===================
+defined in v4l2-mem2mem.h:
+
+* struct v4l2_m2m_ctx - Memory to memory context structure
+ *
+ * @q_lock: struct &mutex lock
+ * @m2m_dev: opaque pointer to the internal data to handle M2M context
+ * @cap_q_ctx: Capture (output to memory) queue context
+ * @out_q_ctx: Output (input from memory) queue context
+ * @queue: List of memory to memory contexts
+ * @job_flags: Job queue flags, used internally by v4l2-mem2mem.c:
+ *              %TRANS_QUEUED, %TRANS_RUNNING and %TRANS_ABORT.
+ * @finished: Wait queue used to signalize when a job queue finished.
+ * @priv: Instance private data
+ *
+ * The memory to memory context is specific to a file handle, NOT to e.g.
+ * a device.
+ */
+struct v4l2_m2m_ctx {
+        /* optional cap/out vb2 queues lock */
+        struct mutex                    *q_lock;
+
+        /* internal use only */
+        struct v4l2_m2m_dev             *m2m_dev;
+
+        struct v4l2_m2m_queue_ctx       cap_q_ctx;
+
+        struct v4l2_m2m_queue_ctx       out_q_ctx;
+
+        /* For device job queue */
+        struct list_head                queue;
+        unsigned long                   job_flags;
+        wait_queue_head_t               finished;
+
+        void                            *priv;
+};
+
+====================
+/* Per-queue, driver-specific private data */
+struct vicodec_q_data {
+        unsigned int            width;
+        unsigned int            height;
+        unsigned int            sizeimage;
+        unsigned int            sequence;
+        const struct v4l2_fwht_pixfmt_info *info;//the different format idis
+};
+====================
+
+====================
+struct vicodec_ctx {
+        struct v4l2_fh          fh;
+        struct vicodec_dev      *dev;
+        bool                    is_enc;
+        spinlock_t              *lock;
+
+        struct v4l2_ctrl_handler hdl;
+
+        struct vb2_v4l2_buffer *last_src_buf;
+        struct vb2_v4l2_buffer *last_dst_buf;
+
+        /* Source and destination queue data */
+        struct vicodec_q_data   q_data[2];//V4L2_M2M_SRC, V4L2_M2M_DST
+        struct v4l2_fwht_state  state;
+
+        u32                     cur_buf_offset;
+        u32                     comp_max_size;
+        u32                     comp_size;
+        u32                     comp_magic_cnt;
+        u32                     comp_frame_size;
+        bool                    comp_has_frame;
+        bool                    comp_has_next_frame;
+};
+
+====================
+
+
+
+====================
+=== vicodec_open ===
+====================
+* allocates `struct vicodec_ctx *ctx`, initiate all stuff in it
+the calls ctx->fh.m2m_ctx = v4l2_m2m_ctx( ..) //this is in v4l2-code/v4l2-mem2mem.c
+
+So we have this loop of pointers ctx->fh->m2m_ctx->ctx(this is priv)
+eventually the fh is added to a list on the dev struct.
+======================
+
+=======================
+struct v4l2_m2m_ctx *v4l2_m2m_ctx_init(struct v4l2_m2m_dev *m2m_dev,
+                void *drv_priv,
+                int (*queue_init)(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq))
+{
+* allocate m2m_ctx and returns in
+* set `m2m_ctx->priv = drv_priv;`
+
+===================================
+================ VIDIOC_QBUF FLOW =
+===================================
+//file's private_data is of type "struct v4l2_fh"
+int v4l2_m2m_ioctl_qbuf(struct file *file, void *priv,
+                                struct v4l2_buffer *buf)
+
+-->v4l2_m2m_qbuf(file, fh->m2m_ctx, buf);
+
+==============
+
+
+==============
+v4l2_m2m_qbuf(struct file *file, struct v4l2_m2m_ctx *m2m_ctx,
+                  struct v4l2_buffer *buf)
+
+--> v4l2_m2m_try_schedule(m2m_ctx);
+==============
+
+==============
+void v4l2_m2m_try_schedule(struct v4l2_m2m_ctx *m2m_ctx)
+
+---> __v4l2_m2m_try_queue(m2m_dev, m2m_ctx);
+--->    v4l2_m2m_try_run(m2m_dev);
+=============
+
+
+=============
+static void v4l2_m2m_try_run(struct v4l2_m2m_dev *m2m_dev)
+---> m2m_dev->m2m_ops->device_run(m2m_dev->curr_ctx->priv);//device_run - priv is `struct vicodec_ctx`
+=============
+
+==============================
+static void device_run(void *priv)//in vicodec-core.c
+struct vicodec_ctx *ctx = priv;
+struct vicodec_dev *dev = ctx->dev;
+
+=============
+/**
+ * struct v4l2_m2m_dev - per-device context
+ * @source:             &struct media_entity pointer with the source entity
+ *                      Used only when the M2M device is registered via
+ *                      v4l2_m2m_unregister_media_controller().
+ * @source_pad:         &struct media_pad with the source pad.
+ *                      Used only when the M2M device is registered via
+ *                      v4l2_m2m_unregister_media_controller().
+ * @sink:               &struct media_entity pointer with the sink entity
+ *                      Used only when the M2M device is registered via
+ *                      v4l2_m2m_unregister_media_controller().
+ * @sink_pad:           &struct media_pad with the sink pad.
+ *                      Used only when the M2M device is registered via
+ *                      v4l2_m2m_unregister_media_controller().
+ * @proc:               &struct media_entity pointer with the M2M device itself.
+ * @proc_pads:          &struct media_pad with the @proc pads.
+ *                      Used only when the M2M device is registered via
+ *                      v4l2_m2m_unregister_media_controller().
+ * @intf_devnode:       &struct media_intf devnode pointer with the interface
+ *                      with controls the M2M device.
+ * @curr_ctx:           currently running instance
+ * @job_queue:          instances queued to run
+ * @job_spinlock:       protects job_queue
+ * @m2m_ops:            driver callbacks
+ */
+struct v4l2_m2m_dev {
+        struct v4l2_m2m_ctx     *curr_ctx;
+#ifdef CONFIG_MEDIA_CONTROLLER
+        struct media_entity     *source;
+        struct media_pad        source_pad;
+        struct media_entity     sink;
+        struct media_pad        sink_pad;
+        struct media_entity     proc;
+        struct media_pad        proc_pads[2];
+        struct media_intf_devnode *intf_devnode;
+#endif
+
+        struct list_head        job_queue;
+        spinlock_t              job_spinlock;
+
+        const struct v4l2_m2m_ops *m2m_ops;
+};
+=========================================
+
+
+	 
+
