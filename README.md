@@ -2,11 +2,13 @@
 
 * to media tree , master, commit 8caec72e8cbff65afa38928197bea5a393b67975
 
-* I frist added the patches of debug prints: 0001-dafna-prints.patch
+* I frist added the patches of debug prints: 0002-dafna-prints.patch
 
 * So, `git am 0001-dafna-prints.patch`
 
-* Then, a silly patch to support greyscale: `git am 0001-support-gryscale-basic.patch` 
+* Then, a silly patch to support greyscale: `git am 0003-greyscale-stupid.patch`
+
+* instead of the two above, can add only the grey patch without prints: `git am 0001-Basic-support-only-to-greyscale.patch` 
 
 * compile and install the kernel and modules
 
