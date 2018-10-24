@@ -1,3 +1,9 @@
+if [ "$#" -ne 2 ]; then
+    echo "$# usage $0 dev-encode-file dev-decode-file"
+    echo "for example: '$0 /dev/video0 /dev/video1'"
+    exit 1
+fi
+
 make
 
 if [ ! -f lena_gray.bmp ]

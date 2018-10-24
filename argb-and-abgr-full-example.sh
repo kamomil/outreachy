@@ -1,3 +1,9 @@
+if [ "$#" -ne 2 ]; then
+    echo "$# usage $0 dev-encode-file dev-decode-file"
+    echo "for example: '$0 /dev/video0 /dev/video1'"
+    exit 1
+fi
+
 make
 
 images=( "globe-scene-fish-bowl-pngcrush.png" "AlphaBall.png" "AlphaEdge.png" "black817-480x360-3.5.png" )
@@ -20,16 +26,16 @@ done
 
 for i in $(seq 4)
 do
-    ./v4l2-encode-new /dev/video2 "${i}-V4L2_PIX_FMT_ARGB32-640x480.raw" "${i}-argb.fwht" V4L2_PIX_FMT_ARGB32
-    ./v4l2-decode-new /dev/video3 "${i}-argb.fwht" "${i}-argb.raw" V4L2_PIX_FMT_ARGB32
+    ./v4l2-encode-new $1 "${i}-V4L2_PIX_FMT_ARGB32-640x480.raw" "${i}-argb.fwht" V4L2_PIX_FMT_ARGB32
+    ./v4l2-decode-new $2 "${i}-argb.fwht" "${i}-argb.raw" V4L2_PIX_FMT_ARGB32
 done
 
 for i in $(seq 4); do python3 plot_raw_argb_img.py ${i}-argb.raw 640 480; done
 
 for i in $(seq 4)
 do
-    ./v4l2-encode-new /dev/video2 "${i}-V4L2_PIX_FMT_ABGR32-640x480.raw" "${i}-bgra.fwht" V4L2_PIX_FMT_ABGR32
-    ./v4l2-decode-new /dev/video3 "${i}-bgra.fwht" "${i}-bgra.raw" V4L2_PIX_FMT_ABGR32
+    ./v4l2-encode-new $1 "${i}-V4L2_PIX_FMT_ABGR32-640x480.raw" "${i}-bgra.fwht" V4L2_PIX_FMT_ABGR32
+    ./v4l2-decode-new $2 "${i}-bgra.fwht" "${i}-bgra.raw" V4L2_PIX_FMT_ABGR32
 done
 
 for i in $(seq 4); do python3 plot_raw_bgra_img.py ${i}-bgra.raw 640 480; done
