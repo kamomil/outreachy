@@ -229,10 +229,16 @@ void print_cap(struct v4l2_capability vcap) {
 
 unsigned int color_format_str_to_id(char* format){
 
-  if(!strcmp(format, "V4L2_PIX_FMT_ABGR32"))
+  printf("got %s\n",format);
+
+  if(!strcmp(format, "V4L2_PIX_FMT_ABGR32")){
+    printf("got       V4L2_PIX_FMT_ABGRB32 %s\n",format);
     return V4L2_PIX_FMT_ABGR32;
-  if(!strcmp(format, "V4L2_PIX_FMT_ARGB32"))
+  }
+  if(!strcmp(format, "V4L2_PIX_FMT_ARGB32")) {
+    printf("got       V4L2_PIX_FMT_ARGB32 %s\n",format);
     return V4L2_PIX_FMT_ARGB32;
+  }
   if(!strcmp(format, "V4L2_PIX_FMT_BGR24"))
     return V4L2_PIX_FMT_BGR24;
   if(!strcmp(format, "V4L2_PIX_FMT_BGR32"))
