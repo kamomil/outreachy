@@ -178,6 +178,11 @@ void send_frames(int fd, struct buffer *buffers)
                 buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
                 buf.memory = V4L2_MEMORY_MMAP;
                 buf.index = i;
+                /*
+                  Oct 12 15:42:26 vdoo kernel: [18260.074362] dafna: device_run
+                  Oct 12 15:42:26 vdoo kernel: [18260.074363] dafna: device_process
+                  Oct 12 15:42:26 vdoo kernel: [18260.074364] dafna: v4l2_fwht_encode
+                 */
                 int ret = ioctl(fd, VIDIOC_QBUF, &buf);
                 if(ret){
                   perror("send_frames: ioctl VIDIOC_QBUF");
@@ -234,6 +239,7 @@ int main(int argc, char **argv)
         enum v4l2_buf_type              type;
         int                             fd = -1;
         unsigned int                    i;
+        char                            *dev_name = NULL;
         struct buffer                   *buffers_cap;
         struct buffer                   *buffers_out;
         int ret = 0;
@@ -243,8 +249,17 @@ int main(int argc, char **argv)
                 printf("'dev_file' is the name of the vicodec device file, e.g. /dev/video1\n");
                 exit(EXIT_FAILURE);
         }
+        dev_name = argv[1];
 
-        fd = open(argv[1], O_RDWR | O_NONBLOCK, 0);
+        /*
+          Oct 12 15:33:08 vdoo kernel: [17702.517355] dafna: vicodec_open
+          Oct 12 15:33:08 vdoo kernel: [17702.517374] dafna: vicodec_s_ctrl
+          Oct 12 15:33:08 vdoo kernel: [17702.517376] dafna: vicodec_s_ctrl
+          Oct 12 15:33:08 vdoo kernel: [17702.517378] dafna: vicodec_s_ctrl
+          Oct 12 15:33:08 vdoo kernel: [17702.517382] dafna: queue_init
+
+         */
+        fd = open(dev_name, O_RDWR | O_NONBLOCK, 0);
         if (fd < 0) {
                 perror("Cannot open device");
                 exit(EXIT_FAILURE);
@@ -267,6 +282,17 @@ int main(int argc, char **argv)
         fmt.fmt.pix.colorspace  = V4L2_COLORSPACE_SRGB;
         //handled by v4l_s_fmt in v4l2-ioctl.c
 
+        /*
+          Oct 12 15:34:08 vdoo kernel: [17762.458087] dafna: in vidioc_s_fmt_vid_out
+          Oct 12 15:34:08 vdoo kernel: [17762.458089] dafna: vidioc_try_fmt_vid_out
+          Oct 12 15:34:08 vdoo kernel: [17762.458090] dafna: vidioc_try_fmt
+          Oct 12 15:34:08 vdoo kernel: [17762.458091] dafna: vidioc_try_fmt: set pix->bytesperline(1920) = pix->width(640) * info->bytesperline_mult (3)
+          Oct 12 15:34:08 vdoo kernel: [17762.458092] dafna: vidioc_try_fmt: pix->sizeimage (921600) = pix->width (640) * pix->height (480) * info->sizeimage_mult (3)/ info->sizeimage_div (1)
+          Oct 12 15:34:08 vdoo kernel: [17762.458093] dafna: vidioc_s_fmt
+          Oct 12 15:34:08 vdoo kernel: [17762.458094] dafna: vidioc_s_fmt_vid_out: case V4L2_BUF_TYPE_VIDEO_OUTPUT/CAPTURE: setting ctx from format
+          Oct 12 15:34:08 vdoo kernel: [17762.458095] dafna: vidioc_s_fmt_vid_out: case V4L2_.._OUTPUT/CAPTURE: setting ctx from format 859981650
+
+         */
         ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl - try other /dev/video* file");
@@ -287,8 +313,16 @@ int main(int argc, char **argv)
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
+        /*
+          Oct 12 15:35:13 vdoo kernel: [17827.234975] dafna: vidioc_s_fmt_vid_cap
+          Oct 12 15:35:13 vdoo kernel: [17827.234976] dafna: vidioc_try_fmt_vid_cap
+          Oct 12 15:35:13 vdoo kernel: [17827.234976] dafna: vidioc_try_fmt
+          Oct 12 15:35:13 vdoo kernel: [17827.234978] dafna: vidioc_try_fmt: set pix->bytesperline(0) = pix->width(640) * info->bytesperline_mult (0)
+          Oct 12 15:35:13 vdoo kernel: [17827.234979] dafna: vidioc_try_fmt: pix->sizeimage (921600) = pix->width (640) * pix->height (480) * info->sizeimage_mult (3)/ info->sizeimage_div (1)
+          Oct 12 15:35:13 vdoo kernel: [17827.234980] dafna: vidioc_s_fmt
 
-	ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
+         */
+        ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl VIDIOC_S_FMT");
           exit(EXIT_FAILURE);
