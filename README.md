@@ -25,6 +25,13 @@
 * for example `python3 plot_raw_grey_img.py lena_grey.raw 640 480`
 
 
+debugging with printing:
+
+```
+sudo su
+echo 8 > /proc/sys/kernel/printk
+```
+
 for dynamic debug , as root:
 
 ```
@@ -35,6 +42,7 @@ echo "file codec-fwht.c line 1- +p" > /sys/kernel/debug/dynamic_debug/control
 * constantly keep dmesg logs: `tail -f /var/log/kern.log`
 
 * `0001-dafna-prints.patch` debug prints patch
+
 
 ## Video4linux2
 
@@ -136,7 +144,8 @@ struct pixfmt_info {
 };
 
 ```
+`perl scripts/checkpatch.pl --types BRACES` shows `if` statements with oneline that has `{`
+a multilne one-line will not be detected.
+Also `C99_COMMENTS` type suppose to detect `//` comments but does not work
 
-```
 
-```
