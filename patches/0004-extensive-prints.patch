@@ -1,0 +1,189 @@
+From 3f23e5e8e8a68df3abfa9ea88c3ca91e7e743ec5 Mon Sep 17 00:00:00 2001
+From: Dafna Hirschfeld <dafna3@gmail.com>
+Date: Fri, 30 Nov 2018 08:31:21 -0800
+Subject: [PATCH 4/5] extensive prints
+
+---
+ .../media/common/videobuf2/videobuf2-core.c    |  2 +-
+ .../media/common/videobuf2/videobuf2-v4l2.c    |  1 +
+ .../media/platform/vicodec/codec-v4l2-fwht.c   |  8 +-------
+ drivers/media/platform/vicodec/vicodec-core.c  | 18 +++++++++++++++---
+ drivers/media/v4l2-core/v4l2-ioctl.c           |  1 +
+ drivers/media/v4l2-core/v4l2-mem2mem.c         |  6 +++++-
+ 6 files changed, 24 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/media/common/videobuf2/videobuf2-core.c b/drivers/media/common/videobuf2/videobuf2-core.c
+index 0ca81d495bda..9dfbf1e93cc1 100644
+--- a/drivers/media/common/videobuf2/videobuf2-core.c
++++ b/drivers/media/common/videobuf2/videobuf2-core.c
+@@ -345,7 +345,7 @@ static int __vb2_queue_alloc(struct vb2_queue *q, enum vb2_memory memory,
+ 			dprintk(1, "memory alloc for buffer struct failed\n");
+ 			break;
+ 		}
+-
++		pr_info("%s: dafna: allocated vb2_buffer %p size %u\n",__func__,vb,q->buf_struct_size);
+ 		vb->state = VB2_BUF_STATE_DEQUEUED;
+ 		vb->vb2_queue = q;
+ 		vb->num_planes = num_planes;
+diff --git a/drivers/media/common/videobuf2/videobuf2-v4l2.c b/drivers/media/common/videobuf2/videobuf2-v4l2.c
+index 1244c246d0c4..4fabecaa2672 100644
+--- a/drivers/media/common/videobuf2/videobuf2-v4l2.c
++++ b/drivers/media/common/videobuf2/videobuf2-v4l2.c
+@@ -493,6 +493,7 @@ static void __fill_v4l2_buffer(struct vb2_buffer *vb, void *pb)
+ 		 */
+ 		b->length = vb->planes[0].length;
+ 		b->bytesused = vb->planes[0].bytesused;
++		pr_info("%s: dafna: b->length = %u b->bytesused = %u\n",__func__,b->length, b->bytesused);
+ 		if (q->memory == VB2_MEMORY_MMAP)
+ 			b->m.offset = vb->planes[0].m.offset;
+ 		else if (q->memory == VB2_MEMORY_USERPTR)
+diff --git a/drivers/media/platform/vicodec/codec-v4l2-fwht.c b/drivers/media/platform/vicodec/codec-v4l2-fwht.c
+index eac5108f388d..7d047e5d219e 100644
+--- a/drivers/media/platform/vicodec/codec-v4l2-fwht.c
++++ b/drivers/media/platform/vicodec/codec-v4l2-fwht.c
+@@ -250,13 +250,7 @@ int v4l2_fwht_decode(struct v4l2_fwht_state *state, u8 *p_in, u8 *p_out)
+ 	    p_hdr->magic2 != FWHT_MAGIC2 ||
+ 	    (cf.width & 7) || (cf.height & 7))
+ 		return -EINVAL;
+-	 }
+-	 if(ntohl(p_hdr->version) != FWHT_VERSION){
+-		pr_info("dafna: %s ERR version\n",__func__);
+-		return -EINVAL;
+-	
+-	 }
+-
++	 
+ 	 if((cf.width & 7) || (cf.height & 7)){
+ 		pr_info("dafna: %s ERR w=0x%x h=0x%x \n",__func__, cf.width, cf.height);
+ 		return -EINVAL;
+diff --git a/drivers/media/platform/vicodec/vicodec-core.c b/drivers/media/platform/vicodec/vicodec-core.c
+index 3ac866acc5e1..4874594224ea 100644
+--- a/drivers/media/platform/vicodec/vicodec-core.c
++++ b/drivers/media/platform/vicodec/vicodec-core.c
+@@ -231,13 +231,14 @@ static void device_run(void *priv)
+ 	q_out = get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+ 
+ 	state = VB2_BUF_STATE_DONE;
+-	pr_info("dafna: %s: about to call device_process\n",__func__);
++	pr_info("dafna: %s: about to call device_process  src_buf=%p, dst_buf=%p\n",__func__, src_buf, dst_buf);
+ 	if (device_process(ctx, src_buf, dst_buf))
+ 		state = VB2_BUF_STATE_ERROR;
+ 	ctx->last_dst_buf = dst_buf;
+ 
+ 	spin_lock(ctx->lock);
+ 	if (!ctx->comp_has_next_frame && src_buf == ctx->last_src_buf) {
++		pr_info("dafna: %s: src_buf is ctx->last_src_buf (%p)\n",__func__,ctx->last_src_buf);
+ 		dst_buf->flags |= V4L2_BUF_FLAG_LAST;
+ 		v4l2_event_queue_fh(&ctx->fh, &eos_event);
+ 	}
+@@ -720,21 +721,27 @@ static int vidioc_s_fmt(struct vicodec_ctx *ctx, struct v4l2_format *f)
+ 	}
+ 
+ 	dprintk(ctx->dev,
+-		"Setting format for type %d, wxh: %dx%d, fourcc: %08x\n",
++		"%s: Setting format for type %d, wxh: %dx%d, fourcc: %08x\n",__func__,
+ 		f->type, q_data->width, q_data->height, q_data->info->id);
+ 
+ 	return 0;
+ }
+ 
++/* This function is a callback.
++ * it is called from withing the function v4l_s_fmt in 
++ * drivers/media/v4l2-core/v4l2-ioctl.ci which is used by __video_do_ioctl
++ * in the same file
++ */
+ static int vidioc_s_fmt_vid_cap(struct file *file, void *priv,
+ 				struct v4l2_format *f)
+ {
+ 	int ret;
+-	pr_info("dafna: %s\n",__func__);
++	pr_info("dafna: %s calling vidioc_try_fmt_vid_cap\n",__func__);
+ 	ret = vidioc_try_fmt_vid_cap(file, priv, f);
+ 	if (ret)
+ 		return ret;
+ 
++	pr_info("dafna: %s calling vidioc_s_fmt\n",__func__);
+ 	return vidioc_s_fmt(file2ctx(file), f);
+ }
+ 
+@@ -787,7 +794,9 @@ static void vicodec_mark_last_buf(struct vicodec_ctx *ctx)
+ 
+ 	spin_lock(ctx->lock);
+ 	ctx->last_src_buf = v4l2_m2m_last_src_buf(ctx->fh.m2m_ctx);
++	pr_info("%s: dafna: set last buffer to %p\n",__func__, ctx->last_src_buf);
+ 	if (!ctx->last_src_buf && ctx->last_dst_buf) {
++		pr_info("%s: add eos event\n",__func__);
+ 		ctx->last_dst_buf->flags |= V4L2_BUF_FLAG_LAST;
+ 		v4l2_event_queue_fh(&ctx->fh, &eos_event);
+ 	}
+@@ -841,6 +850,7 @@ static int vicodec_decoder_cmd(struct file *file, void *fh,
+ 	struct vicodec_ctx *ctx = file2ctx(file);
+ 	int ret;
+ 
++	pr_info("%s: dafna: calling vicodec_try_decoder_cmd and vicodec_mark_last_buf\n",__func__);
+ 	ret = vicodec_try_decoder_cmd(file, fh, dc);
+ 	if (ret < 0)
+ 		return ret;
+@@ -1208,6 +1218,7 @@ static int vicodec_open(struct file *file)
+ 		rc = -ENOMEM;
+ 		goto open_unlock;
+ 	}
++	pr_info("dafna: %s allocated ctx %p\n",__func__,ctx);
+ 
+ 	if (vfd == &dev->enc_vfd)
+ 		ctx->is_enc = true;
+@@ -1284,6 +1295,7 @@ static int vicodec_release(struct file *file)
+ 	struct video_device *vfd = video_devdata(file);
+ 	struct vicodec_ctx *ctx = file2ctx(file);
+ 
++	pr_info("%s: dafna: freeing ctx %p\n",__func__, ctx);
+ 	v4l2_fh_del(&ctx->fh);
+ 	v4l2_fh_exit(&ctx->fh);
+ 	v4l2_ctrl_handler_free(&ctx->hdl);
+diff --git a/drivers/media/v4l2-core/v4l2-ioctl.c b/drivers/media/v4l2-core/v4l2-ioctl.c
+index 270277610435..01f5210fb95c 100644
+--- a/drivers/media/v4l2-core/v4l2-ioctl.c
++++ b/drivers/media/v4l2-core/v4l2-ioctl.c
+@@ -2777,6 +2777,7 @@ static long __video_do_ioctl(struct file *file,
+ 		return ret;
+ 	}
+ 
++	pr_info("%s: dafna - start\n",__func__);
+ 	if (test_bit(V4L2_FL_USES_V4L2_FH, &vfd->flags))
+ 		vfh = file->private_data;
+ 
+diff --git a/drivers/media/v4l2-core/v4l2-mem2mem.c b/drivers/media/v4l2-core/v4l2-mem2mem.c
+index bf0ec16d4951..d9b042dc5a93 100644
+--- a/drivers/media/v4l2-core/v4l2-mem2mem.c
++++ b/drivers/media/v4l2-core/v4l2-mem2mem.c
+@@ -326,6 +326,8 @@ static void __v4l2_m2m_try_queue(struct v4l2_m2m_dev *m2m_dev,
+ 	}
+ 	spin_unlock_irqrestore(&m2m_ctx->cap_q_ctx.rdy_spinlock, flags_cap);
+ 	spin_unlock_irqrestore(&m2m_ctx->out_q_ctx.rdy_spinlock, flags_out);
++	
++	pr_info("%s: dafna: about to call job_ready callback\n",__func__);
+ 
+ 	if (m2m_dev->m2m_ops->job_ready
+ 		&& (!m2m_dev->m2m_ops->job_ready(m2m_ctx->priv))) {
+@@ -345,6 +347,7 @@ static void __v4l2_m2m_try_queue(struct v4l2_m2m_dev *m2m_dev,
+ 	spin_unlock_irqrestore(&m2m_ctx->out_q_ctx.rdy_spinlock, flags_out);
+ job_unlock:
+ 	spin_unlock_irqrestore(&m2m_dev->job_spinlock, flags_job);
++	dprintk("%s: dafna: job queued\n",__func__);
+ }
+ 
+ /**
+@@ -362,8 +365,9 @@ static void __v4l2_m2m_try_queue(struct v4l2_m2m_dev *m2m_dev,
+ void v4l2_m2m_try_schedule(struct v4l2_m2m_ctx *m2m_ctx)
+ {
+ 	struct v4l2_m2m_dev *m2m_dev = m2m_ctx->m2m_dev;
+-	pr_info("dafna: %s: m2m_dev = %p\n",__func__, m2m_dev);
++	pr_info("dafna: %s: m2m_dev = %p ctx = %p, calling __v4l2_m2m_try_queue\n",__func__, m2m_dev, m2m_ctx);
+ 	__v4l2_m2m_try_queue(m2m_dev, m2m_ctx);
++	pr_info("dafna: %s: m2m_dev = %p ctx = %p, calling v4l2_m2m_try_run\n",__func__, m2m_dev, m2m_ctx);
+ 	v4l2_m2m_try_run(m2m_dev);
+ }
+ EXPORT_SYMBOL_GPL(v4l2_m2m_try_schedule);
+-- 
+2.17.1
+

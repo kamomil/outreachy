@@ -1,0 +1,42 @@
+From c8323ae1c1937f3dcb42819fce8ef55d7accb351 Mon Sep 17 00:00:00 2001
+From: Dafna Hirschfeld <dafna3@gmail.com>
+Date: Tue, 13 Nov 2018 11:57:18 +0200
+Subject: [PATCH 2/5] more prints
+
+---
+ drivers/media/platform/vicodec/codec-v4l2-fwht.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/drivers/media/platform/vicodec/codec-v4l2-fwht.c b/drivers/media/platform/vicodec/codec-v4l2-fwht.c
+index 8cb0212df67f..48d58b87f2eb 100644
+--- a/drivers/media/platform/vicodec/codec-v4l2-fwht.c
++++ b/drivers/media/platform/vicodec/codec-v4l2-fwht.c
+@@ -196,6 +196,12 @@ int v4l2_fwht_encode(struct v4l2_fwht_state *state, u8 *p_in, u8 *p_out)
+ 		flags |= FWHT_FL_CHROMA_FULL_HEIGHT;
+ 	if (rf.width_div == 1)
+ 		flags |= FWHT_FL_CHROMA_FULL_WIDTH;
++
++	pr_info("ENCODING luma UN compressed: %lu\n", flags & FWHT_FL_LUMA_IS_UNCOMPRESSED);
++	pr_info("cb UN compressed: %lu\n", flags & FWHT_FL_CB_IS_UNCOMPRESSED);
++	pr_info("cr UN compressed: %lu\n", flags & FWHT_FL_CR_IS_UNCOMPRESSED);
++	pr_info("alpha UN compressed: %lu\n", flags & FWHT_FL_ALPHA_IS_UNCOMPRESSED);
++
+ 	p_hdr->flags = htonl(flags);
+ 	p_hdr->colorspace = htonl(state->colorspace);
+ 	p_hdr->xfer_func = htonl(state->xfer_func);
+@@ -262,6 +268,12 @@ int v4l2_fwht_decode(struct v4l2_fwht_state *state, u8 *p_in, u8 *p_out)
+ 
+ 	fwht_decode_frame(&cf, &state->ref_frame, flags, components_num);
+ 
++	pr_info("DECODING luma UN compressed: %lu\n", flags & FWHT_FL_LUMA_IS_UNCOMPRESSED);
++	pr_info("cb UN compressed: %lu\n", flags & FWHT_FL_CB_IS_UNCOMPRESSED);
++	pr_info("cr UN compressed: %lu\n", flags & FWHT_FL_CR_IS_UNCOMPRESSED);
++	pr_info("alpha UN compressed: %lu\n", flags & FWHT_FL_ALPHA_IS_UNCOMPRESSED);
++
++
+ 	/*
+ 	 * TODO - handle the case where the compressed stream encodes a
+ 	 * different format than the requested decoded format.
+-- 
+2.17.1
+

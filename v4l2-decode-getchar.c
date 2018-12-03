@@ -1,6 +1,5 @@
-/* V4L2 video encoder
-   Copyright (C) 2018 Helen Koike <helen.koike@collabora.com>,
-                      Dafna Hirschfeld <dafna3@gmail.com>
+/* V4L2 video decoder
+   Copyright (C) 2018 Helen Koike <helen.koike@collabora.com>
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -51,6 +50,9 @@ struct buffer *prepare_buffers(int fd, int type)
         req.memory = V4L2_MEMORY_MMAP;
         //handled by v4l_reqbufs
         //Initiate Memory Mapping, User Pointer I/O or DMA buffer I/O
+        printf("getchar: about to VIDIOC_REQBUFS\n");
+        getchar();
+        
         int ret = ioctl(fd, VIDIOC_REQBUFS, &req);
         if(ret){
           perror("ioctl VIDIOC_REQBUFS");
@@ -58,16 +60,17 @@ struct buffer *prepare_buffers(int fd, int type)
 
         }
         else{
-          printf("ioctl VIDIOC_REQBUFS for type %d was ok, ask for %d buffers\n",type, req.count);
+          printf("ioctl VIDIOC_REQBUFS was ok, ask for %d buffers\n",req.count);
         }
-        if (req.count != N_BUFS) {
-                perror("this app requires different number of buffers");
+        if (req.count < N_BUFS) {
+                perror("this app requires more then " "N_BUFS"  " buffers");
                 exit(EXIT_FAILURE);
         }
 
         /* Request buffers */
         buffers = calloc(req.count, sizeof(*buffers));
-        for (n_buffers = 0; n_buffers < N_BUFS; ++n_buffers) {
+        printf("allocated buffers - size allocated is %lu\n",sizeof(*buffers));
+	for (n_buffers = 0; n_buffers < N_BUFS; ++n_buffers) {
                 CLEAR(buf);
 
                 buf.type        = type;
@@ -75,17 +78,19 @@ struct buffer *prepare_buffers(int fd, int type)
                 buf.index       = n_buffers;
 
                 //VIDIOC_QUERYBUF - Query the status of a buffer
+                printf("getchar: about to VIDIOC_QUERYBUF\n");
+	        getchar();
                 ret = ioctl(fd, VIDIOC_QUERYBUF, &buf);
                 if(ret){
                   perror("ioctl VIDIOC_QUERYBUF");
                   exit(EXIT_FAILURE);
 
                 }
+		printf("got buffer length %u\n",buf.length);
                 buffers[n_buffers].length = buf.length;
                 buffers[n_buffers].start = mmap(NULL, buf.length,
                               PROT_READ | PROT_WRITE, MAP_SHARED,
                               fd, buf.m.offset);
-                printf("prepare_buffers: mapping %d, got %p\n",buf.length,buffers[n_buffers].start);
 
                 if (MAP_FAILED == buffers[n_buffers].start) {
                         perror("mmap");
@@ -100,6 +105,8 @@ struct buffer *prepare_buffers(int fd, int type)
                         buf.type = type;
                         buf.memory = V4L2_MEMORY_MMAP;
                         buf.index = i;
+                        printf("getchar: about to VIDIOC_QBUF\n");
+                        getchar();
                         ret = ioctl(fd, VIDIOC_QBUF, &buf);
                         if(ret){
                           perror("ioctl VIDIOC_QBUF");
@@ -122,21 +129,17 @@ void recv_frames(int fd, struct buffer *buffers)
                 CLEAR(buf);
                 buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 buf.memory = V4L2_MEMORY_MMAP;
-                int ret = ioctl(fd, VIDIOC_DQBUF, &buf);
-		if(ret){
-                  perror("recv_frames: ioctl VIDIOC_DQBUF");
-                  exit(EXIT_FAILURE);
-                }
+                printf("getchar: recv_frames: about to VIDIOC_DQBUF\n");
+                getchar();
+                ioctl(fd, VIDIOC_DQBUF, &buf);
 
-		sprintf(out_name, "data/compressed%03d.fwht", i);
-                
+                sprintf(out_name, "raw%03d.ppm", i);
                 fcap = fopen(out_name, "w");
                 if (!fcap) {
                         perror("Cannot open image");
                         exit(EXIT_FAILURE);
                 }
-                //fprintf(fcap, "P6\n%d %d 255\n", WIDTH, HEIGHT);
-                printf("recv_frames: writing %u bytes to compressed buffer\n",buf.bytesused);
+                fprintf(fcap, "P6\n%d %d 255\n", WIDTH, HEIGHT);
                 fwrite(buffers[buf.index].start, buf.bytesused, 1, fcap);
                 fclose(fcap);
 
@@ -144,7 +147,9 @@ void recv_frames(int fd, struct buffer *buffers)
                         break;
 
                 //VIDIOC_QBUF - VIDIOC_DQBUF - Exchange a buffer with the driver
-                ret = ioctl(fd, VIDIOC_QBUF, &buf);
+		printf("getchar: recv_frames: about to call VIDIOC_QBUF\n");
+		getchar();
+                 int ret = ioctl(fd, VIDIOC_QBUF, &buf);
                 if(ret){
                   perror("recv_frames: ioctl VIDIOC_QBUF");
                   exit(EXIT_FAILURE);
@@ -163,8 +168,7 @@ void send_frames(int fd, struct buffer *buffers)
         struct v4l2_encoder_cmd         enc;
 
         for (i = 0; i < N_BUFS; i++) {
-
-                sprintf(out_name, "raw%03d.ppm", i);
+                sprintf(out_name, "data/compressed%03d.fwht", i);
                 fout = fopen(out_name, "r");
                 if (!fout) {
                         perror("Cannot open image");
@@ -172,68 +176,36 @@ void send_frames(int fd, struct buffer *buffers)
                 }
                 //move pos to eof
                 fseek(fout, 0L, SEEK_END);
-                numbytes = ftell(fout) - 15;//15 is the header size
+                numbytes = ftell(fout);
                 fseek(fout, 0L, SEEK_SET);
 
-		fread(buffers[i].start, 1, 15, fout);//skip the header
                 CLEAR(buf);
-
+                printf("send_frames: copying %ld bytes from %s\n",numbytes,out_name);
                 buf.bytesused = fread(buffers[i].start, 1, numbytes, fout);
-                printf("send_frames: copying %ld bytes from %s to %p, first byte is 0x%02x\n",numbytes,out_name,buffers[i].start,  *((unsigned char*)buffers[i].start));
                 fclose(fout);
 
                 buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
                 buf.memory = V4L2_MEMORY_MMAP;
                 buf.index = i;
-                printf("send_frames: before VIDIOC_QBUF\n");
+		printf("getchar: in send_frames about to call VIDIOC_QBUF\n");
+		getchar();
                 int ret = ioctl(fd, VIDIOC_QBUF, &buf);
                 if(ret){
                   perror("send_frames: ioctl VIDIOC_QBUF");
                   exit(EXIT_FAILURE);
                 }
-                printf("send_frames: after VIDIOC_QBUF\n");
 
         }
         CLEAR(enc);
-        enc.cmd = V4L2_ENC_CMD_STOP;
-        int ret = ioctl(fd, VIDIOC_ENCODER_CMD, &enc);
+        enc.cmd = V4L2_DEC_CMD_STOP;
+        printf("getchar: in send_frames about to call VIDIOC_DECODER_CMD\n");
+	getchar();
+        int ret = ioctl(fd, VIDIOC_DECODER_CMD, &enc);
         if(ret){
-          perror("ioctl VIDIOC_ENCODER_CMD");
+          perror("ioctl VIDIOC_DECODER_CMD");
           exit(EXIT_FAILURE);
 
         }
-
-}
-
-/*
-  struct v4l2_format {
-  __u32	 type;
-  union {
-  struct v4l2_pix_format		pix;     // V4L2_BUF_TYPE_VIDEO_CAPTURE
-  struct v4l2_pix_format_mplane	pix_mp;  // V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
-  struct v4l2_window		win;     // V4L2_BUF_TYPE_VIDEO_OVERLAY
-  struct v4l2_vbi_format		vbi;     // V4L2_BUF_TYPE_VBI_CAPTURE
-  struct v4l2_sliced_vbi_format	sliced;  // V4L2_BUF_TYPE_SLICED_VBI_CAPTURE
-  struct v4l2_sdr_format		sdr;     // V4L2_BUF_TYPE_SDR_CAPTURE
-  struct v4l2_meta_format		meta;    // V4L2_BUF_TYPE_META_CAPTURE
-  __u8	raw_data[200];                   // user-defined
-  } fmt;
-};
-
-
- */
-
-void print_cap(struct v4l2_capability vcap) {
-
-  printf("driver = %s\n",vcap.driver);
-  printf("device = %s\n",vcap.card);
-  printf("bus_info = %s\n",vcap.bus_info);
-  printf("version = %u.%u.%u\n",(vcap.version >> 16) & 0xFF, (vcap.version >> 8) & 0xFF, vcap.version & 0xFF);
-//vicodec returns: 0x84208000
-//this is V4L2_CAP_VIDEO_M2M_MPLANE|V4L2_CAP_EXT_PIX_FORMAT|V4L2_CAP_STREAMING|V4L2_CAP_DEVICE_CAPS
-  printf("capabilities = 0x%08x\n",vcap.capabilities);
-  printf("device_caps  = 0x%08x\n",vcap.device_caps);
-  
 
 }
 
@@ -243,82 +215,84 @@ int main(int argc, char **argv)
         enum v4l2_buf_type              type;
         int                             fd = -1;
         unsigned int                    i;
+        char                            *dev_name = NULL;
         struct buffer                   *buffers_cap;
         struct buffer                   *buffers_out;
         int ret = 0;
-
         if (argc < 2) {
-                printf("usage: %s dev_file\n", argv[0]);
-                printf("'dev_file' is the name of the vicodec device file, e.g. /dev/video1\n");
-                exit(EXIT_FAILURE);
-        }
-
-        fd = open(argv[1], O_RDWR | O_NONBLOCK, 0);
+		printf("Missing dev-file\n");
+		printf("`dev-file` is the name of the vicodec device file, e.g. /dev/video1\n"); 
+		exit(EXIT_FAILURE);
+	}
+	dev_name = argv[1];
+	printf("about to open the device\n");
+	fd = open(dev_name, O_RDWR | O_NONBLOCK, 0);
         if (fd < 0) {
                 perror("Cannot open device");
                 exit(EXIT_FAILURE);
         }
 
-        struct v4l2_capability vicodec_cap;
-        CLEAR(vicodec_cap);
-        ret = ioctl(fd, VIDIOC_QUERYCAP, &vicodec_cap);
-        if(ret){
-          perror("ioctl - try other /dev/video* file");
-          return -1;
-        }
-        print_cap(vicodec_cap);
         /* Set formats in capture and output */
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	fmt.fmt.pix.width       = WIDTH;
+        fmt.fmt.pix.width       = WIDTH;
         fmt.fmt.pix.height      = HEIGHT;
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
-        fmt.fmt.pix.colorspace  = V4L2_COLORSPACE_SRGB;
+        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
         //handled by v4l_s_fmt in v4l2-ioctl.c
-
+	printf("getchar: about to ioctl VIDIOC_S_FMT\n");
+	getchar();
         ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl - try other /dev/video* file");
           return -1;
+
         }
-        
-        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB24) {
-          printf("Driver didn't accept RGB24 format. Can't proceed.\n");
+        else{
+          printf("ioctl VIDIOC_S_FMT was ok\n");
+        }
+        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_FWHT) {
+          printf("Driver didn't accept FWHT format. Can't proceed.\n");
           printf("fmt.fmt.pix.pixelformat: %d\n",fmt.fmt.pix.pixelformat);
-          printf("V4L2_PIX_FMT_RGB24 = %d\n",V4L2_PIX_FMT_RGB24);
+          printf("V4L2_BUF_TYPE_VIDEO_OUTPUT = %d\n",V4L2_BUF_TYPE_VIDEO_OUTPUT);
           exit(EXIT_FAILURE);
         }
-	if ((fmt.fmt.pix.width != WIDTH) || (fmt.fmt.pix.height != HEIGHT))
-                printf("Warning: driver is sending image at %dx%d\n",
-                        fmt.fmt.pix.width, fmt.fmt.pix.height);
-
 
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
-
-	ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
+        fmt.fmt.pix.width       = WIDTH;
+        fmt.fmt.pix.height      = HEIGHT;
+        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
+        fmt.fmt.pix.colorspace  = V4L2_COLORSPACE_SRGB;
+        printf("getchar: about to VIDCODEC_S_FMT again\n");
+	getchar();
+        ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
         if(ret){
           perror("ioctl VIDIOC_S_FMT");
           exit(EXIT_FAILURE);
         }
 
-        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_FWHT) {
-                printf("Driver didn't accept FWHT format. Can't proceed.\n");
+        if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB24) {
+                printf("Driver didn't accept RGB24 format. Can't proceed.\n");
                 printf("fmt.fmt.pix.pixelformat: %d\n",fmt.fmt.pix.pixelformat);
-                printf("V4L2_PIX_FMT_FWHT = %d\n",V4L2_PIX_FMT_FWHT);
+                printf("V4L2_PIX_FMT_RGB24 = %d\n",V4L2_PIX_FMT_RGB24);
                 exit(EXIT_FAILURE);
         }
-        
+        if ((fmt.fmt.pix.width != WIDTH) || (fmt.fmt.pix.height != HEIGHT))
+                printf("Warning: driver is sending image at %dx%d\n",
+                        fmt.fmt.pix.width, fmt.fmt.pix.height);
 
         /* Allocate buffers in capture and output */
-        buffers_out = prepare_buffers(fd, V4L2_BUF_TYPE_VIDEO_OUTPUT);//our output are the ppm files
+        buffers_out = prepare_buffers(fd, V4L2_BUF_TYPE_VIDEO_OUTPUT);
         buffers_cap = prepare_buffers(fd, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 
         /* Start streaming */
         type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	printf("getchar: about to VIDIOC_STREAMON\n");
+        getchar();
         ioctl(fd, VIDIOC_STREAMON, &type);
         type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+        printf("getchar: about to VIDIOC_STREAMON\n");
+        getchar();
         ioctl(fd, VIDIOC_STREAMON, &type);
 
         /* Send the images to be encoded */

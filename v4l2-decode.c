@@ -30,7 +30,7 @@
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
 #define WIDTH  640
-#define HEIGHT 360
+#define HEIGHT 480
 
 struct buffer {
         void   *start;
@@ -84,6 +84,7 @@ struct buffer *prepare_buffers(int fd, int type)
                 buffers[n_buffers].start = mmap(NULL, buf.length,
                               PROT_READ | PROT_WRITE, MAP_SHARED,
                               fd, buf.m.offset);
+                printf("prepare_buffers: mapping %d, got %p\n",buf.length,buffers[n_buffers].start);
 
                 if (MAP_FAILED == buffers[n_buffers].start) {
                         perror("mmap");
@@ -120,7 +121,11 @@ void recv_frames(int fd, struct buffer *buffers)
                 CLEAR(buf);
                 buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 buf.memory = V4L2_MEMORY_MMAP;
-                ioctl(fd, VIDIOC_DQBUF, &buf);
+                int ret = ioctl(fd, VIDIOC_DQBUF, &buf);
+		if(ret){
+                  perror("recv_frames: ioctl VIDIOC_DQBUF");
+                  exit(EXIT_FAILURE);
+                }
 
                 sprintf(out_name, "raw%03d.ppm", i);
                 fcap = fopen(out_name, "w");
@@ -129,6 +134,7 @@ void recv_frames(int fd, struct buffer *buffers)
                         exit(EXIT_FAILURE);
                 }
                 fprintf(fcap, "P6\n%d %d 255\n", WIDTH, HEIGHT);
+                printf("recv_frames: writing %u bytes to decompressed buffer\n",buf.bytesused);
                 fwrite(buffers[buf.index].start, buf.bytesused, 1, fcap);
                 fclose(fcap);
 
@@ -136,7 +142,7 @@ void recv_frames(int fd, struct buffer *buffers)
                         break;
 
                 //VIDIOC_QBUF - VIDIOC_DQBUF - Exchange a buffer with the driver
-                int ret = ioctl(fd, VIDIOC_QBUF, &buf);
+                ret = ioctl(fd, VIDIOC_QBUF, &buf);
                 if(ret){
                   perror("recv_frames: ioctl VIDIOC_QBUF");
                   exit(EXIT_FAILURE);
@@ -174,11 +180,13 @@ void send_frames(int fd, struct buffer *buffers)
                 buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
                 buf.memory = V4L2_MEMORY_MMAP;
                 buf.index = i;
+                printf("send_frames: before VIDIOC_QBUF\n");
                 int ret = ioctl(fd, VIDIOC_QBUF, &buf);
                 if(ret){
                   perror("send_frames: ioctl VIDIOC_QBUF");
                   exit(EXIT_FAILURE);
                 }
+                printf("send_frames: after VIDIOC_QBUF\n");
 
         }
         CLEAR(enc);
@@ -217,6 +225,8 @@ int main(int argc, char **argv)
         /* Set formats in capture and output */
         CLEAR(fmt);
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+        fmt.fmt.pix.width       = WIDTH;
+        fmt.fmt.pix.height      = HEIGHT;
         fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_FWHT;
         //handled by v4l_s_fmt in v4l2-ioctl.c
         ret = ioctl(fd, VIDIOC_S_FMT, &fmt);
