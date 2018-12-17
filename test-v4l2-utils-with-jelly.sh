@@ -20,13 +20,19 @@ then
 	ffmpeg -s 1920x1080 -pix_fmt rgb24 -f rawvideo -i images/jelly-1920-1080.RGB3 -filter:v "crop=902:902:0:0" -pix_fmt rgb24  -f rawvideo images/jelly-902-902.RGB3
 fi
 
+if [ ! -f images/jelly-1920-1080.NV12 ]
+then
+	ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt nv12 -f rawvideo images/jelly-1920-1080.NV12
+fi
+
 
 
 function codec {
 
    case "$5" in
     YU12) ffp=yuv420p ;;
-    *) ffp=rgb24 ;;
+    RGB3) ffp=rgb24 ;;
+    NV12) ffp=nv12 ;;
    esac
 
    echo "ffp=$ffp"
@@ -38,6 +44,8 @@ function codec {
    ffplay -v info -f rawvideo -pixel_format $ffp -video_size $1x$2  out-$1-$2.$5
 
 }
+
+codec 1440 900 1920 1080 NV12
 
 codec 902 902 902 902 RGB3
 
