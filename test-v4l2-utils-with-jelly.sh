@@ -5,6 +5,10 @@ if [ ! -f jellyfish-10-mbps-hd-h264.mkv ]
 then
 	wget http://jell.yfish.us/media/jellyfish-10-mbps-hd-h264.mkv
 fi
+if [ ! -d images ]
+then
+	mkdir images
+fi
 
 if [ ! -f images/jelly-1920-1080.YU12 ]
 then
