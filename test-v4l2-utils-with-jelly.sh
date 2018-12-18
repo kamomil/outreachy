@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 
-if [ ! if ! md5sum -c jelly.md5 ]
+if [ ! -f jellyfish-10-mbps-hd-h264.mkv ]
 then
 	wget http://jell.yfish.us/media/jellyfish-10-mbps-hd-h264.mkv
 fi
