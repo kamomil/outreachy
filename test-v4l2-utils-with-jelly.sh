@@ -8,7 +8,10 @@ fi
 
 if [ ! -f images/jelly-1920-1080.YU12 ]
 then
-	ffmpeg -i jellyfish-10-mbps-hd-h264.mkv -c:v rawvideo -pix_fmt yuv420p -f rawvideo images/jelly-1920-1080.YU12
+	ffmpeg -i jellyfish-10-mbps-hd-h264.mkv -c:v rawvideo -pix_fmt yuv420p -f rawvideo /tmp/tmp
+	#reduce the video length by half, by removing the first 225 and last 255 frames.
+	tail -c $((3*1920*1080*675/2)) /tmp/tmp | head -c $((3*1920*1080*450/2)) > images/jelly-1920-1080.YU12
+	rm /tmp/tmp
 fi
 if [ ! -f images/jelly-1920-1080.RGB3 ]
 then
