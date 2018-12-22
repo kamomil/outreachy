@@ -36,33 +36,46 @@ fi
 
 function codec {
 
-   case "$5" in
+   case "$3" in
     YU12) ffp=yuv420p ;;
     RGB3) ffp=rgb24 ;;
     NV12) ffp=nv12 ;;
+    *)    echo "pixelformat should be one of YU12, RGB3 NV12"
+          exit 1
+          ;;
    esac
 
    echo "ffp=$ffp"
 
-   v4l2-ctl -d0 --set-selection-output target=crop,width=$1,height=$2   -x width=$3,height=$4,pixelformat=$5 --stream-mmap --stream-out-mmap --stream-to jelly_$1-$2-$5.fwht --stream-from images/jelly-$3-$4.$5 --all
+   v4l2-ctl -d0 --set-selection-output target=crop,width=$1,height=$2   -x width=$1,height=$2,pixelformat=$3 --stream-mmap --stream-out-mmap --stream-to jelly_$1-$2-$3.fwht --stream-from images/jelly-$1-$2.$3 || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
-   v4l2-ctl -d1 -x width=$1,height=$2 -v width=$1,height=$2,pixelformat=$5 --stream-mmap --stream-out-mmap --stream-from jelly_$1-$2-$5.fwht --stream-to out-$1-$2.$5 --all
+   v4l2-ctl -d1 --set-selection target=compose,width=$1,height=$2 -x width=$1,height=$2 -v width=$1,height=$2,pixelformat=$3 --stream-mmap --stream-out-mmap --stream-from jelly_$1-$2-$3.fwht --stream-to out-$1-$2.$3 || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
-   ffplay -v info -f rawvideo -pixel_format $ffp -video_size $1x$2  out-$1-$2.$5
+
+   ffplay -v info -f rawvideo -pixel_format $ffp -video_size $1x$2  out-$1-$2.$3
 
 }
 
-codec 1440 900 1920 1080 NV12
+if [ "$#" -eq 3 ]; then
+    codec $1 $2 $3
 
-codec 902 902 902 902 RGB3
+elif [ "$#" -eq 0 ]; then
 
-codec 642 642 1920 1080 RGB3
-codec 642 642 1920 1080 YU12
+    codec 1920 1080 NV12
+    codec 902 902 RGB3
 
-codec 1440 900  1920 1080 RGB3
-codec 1440 900  1920 1080 YU12
+    codec 1920 1080 RGB3
+    codec 1920 1080 YU12
 
-codec 1920 1080 1920 1080 RGB3
-codec 1920 1080 1920 1080 YU12
+    codec 1920 1080 RGB3
+    codec 1920 1080 YU12
+    
+    codec 1920 1080 RGB3
+    codec 1920 1080 YU12
+
+else
+   echo "usage: [crop-width] [crop-height] [width] [height] [pixelformat]"
+   echo "if no args are give then some default tests run"
+fi
 
 
