@@ -17,6 +17,12 @@ then
 	tail -c $((3*1920*1080*675/2)) /tmp/tmp | head -c $((3*1920*1080*450/2)) > images/jelly-1920-1080.YU12
 	rm /tmp/tmp
 fi
+
+if [ ! -f images/jelly-1920-1080.GREY ]
+then
+ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt gray -f rawvideo images/jelly-1920-1080.GREY
+fi
+
 if [ ! -f images/jelly-1920-1080.RGB3 ]
 then
 	ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt rgb24 -f rawvideo images/jelly-1920-1080.RGB3
@@ -32,6 +38,13 @@ then
 	ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt nv12 -f rawvideo images/jelly-1920-1080.NV12
 fi
 
+if [ ! -f images/jelly-1920-1080.BA24 ]
+then
+	head -c $((1920*1080*3*225)) images/jelly-1920-1080.RGB3 > tmp1
+	tail -c $((1920*1080*3*225)) images/jelly-1920-1080.RGB3 > tmp2
+	ffmpeg -pix_fmt rgb24 -s 1920x1080 -f rawvideo  -i tmp1 -pix_fmt rgb24 -s 1920x1080 -f rawvideo  -i tmp2 -filter_complex "[1]format=argb,colorchannelmixer=aa=0.5[front];[0][front]overlay=x=(W-w)/2:y=H-h" -pix_fmt argb -s 1920x1080 -f rawvideo  images/jelly-1920-1080.BA24
+	rm tmp1 tmp2
+fi
 
 
 function codec {
@@ -40,7 +53,9 @@ function codec {
     YU12) ffp=yuv420p ;;
     RGB3) ffp=rgb24 ;;
     NV12) ffp=nv12 ;;
-    *)    echo "pixelformat should be one of YU12, RGB3 NV12"
+    BA24) ffp=argb ;;
+    GREY) ffp=gray ;;
+    *)    echo "pixelformat should be one of YU12, RGB3, BA24, GREY, NV12"
           exit 1
           ;;
    esac
@@ -61,6 +76,8 @@ if [ "$#" -eq 3 ]; then
 
 elif [ "$#" -eq 0 ]; then
 
+    codec 1920 1080 GREY
+    codec 1920 1080 BA24
     codec 1920 1080 NV12
     codec 902 902 RGB3
 
