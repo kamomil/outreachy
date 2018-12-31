@@ -49,7 +49,35 @@ fi
 
 function codec {
 
-   case "$3" in
+format=${@:$#}
+w=$1
+h=$2
+cr_w=$1
+cr_h=$2
+cp_w=$1
+cp_h=$2
+for var in "${@:3:2}"
+do
+target=${var%=*}
+dim=${var#*=}
+t_w=${dim%x*}
+t_h=${dim#*x}
+
+if [ $target = "crop" ]; then
+cr_w=$t_w
+cr_h=$t_h
+cp_w=$t_w
+cp_h=$t_h
+fi
+if [ $target = "compose" ]; then
+cp_w=$t_w
+cp_h=$t_h
+fi
+done
+
+echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
+   case "$format" in
+
     YU12) ffp=yuv420p ;;
     RGB3) ffp=rgb24 ;;
     NV12) ffp=nv12 ;;
@@ -62,12 +90,12 @@ function codec {
 
    echo "ffp=$ffp"
 
-   v4l2-ctl -d0 --set-selection-output target=crop,width=$1,height=$2   -x width=$1,height=$2,pixelformat=$3 --stream-mmap --stream-out-mmap --stream-to jelly_$1-$2-$3.fwht --stream-from images/jelly-$1-$2.$3 || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
+   v4l2-ctl -d0 --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
-   v4l2-ctl -d1 --set-selection target=compose,width=$1,height=$2 -x width=$1,height=$2 -v width=$1,height=$2,pixelformat=$3 --stream-mmap --stream-out-mmap --stream-from jelly_$1-$2-$3.fwht --stream-to out-$1-$2.$3 || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
+   v4l2-ctl -d1 --set-selection target=compose,width=$cp_w,height=$cp_h -x width=$cr_w,height=$cr_h -v width=$cp_w,height=$cp_h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly_$cr_w-$cr_h-$format.fwht --stream-to out-$cp_w-$cp_h.$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
 
-   ffplay -v info -f rawvideo -pixel_format $ffp -video_size $1x$2  out-$1-$2.$3
+   ffplay -v info -f rawvideo -pixel_format $ffp -video_size "${cp_w}x${cp_h}"  out-$cp_w-$cp_h.$format
 
 }
 
@@ -76,17 +104,14 @@ if [ "$#" -eq 3 ]; then
 
 elif [ "$#" -eq 0 ]; then
 
+    codec 1920 1080 crop=640x480 GREY
+    codec 1920 1080 crop=860x540 compose=800x500  GREY
+    codec 1920 1080 compose=600x600 GREY
     codec 1920 1080 GREY
     codec 1920 1080 BA24
     codec 1920 1080 NV12
     codec 902 902 RGB3
 
-    codec 1920 1080 RGB3
-    codec 1920 1080 YU12
-
-    codec 1920 1080 RGB3
-    codec 1920 1080 YU12
-    
     codec 1920 1080 RGB3
     codec 1920 1080 YU12
 
