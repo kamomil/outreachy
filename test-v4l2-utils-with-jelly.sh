@@ -1,6 +1,9 @@
 #!/bin/bash
 set -x
 
+declare -A v4l_2_ffmpeg_fmt
+v4l_2_ffmpeg_fmt=( ["YU12"]="yuv420p" ["RGB3"]="rgb24" ["NV12"]="nv12" ["BA24"]="argb" ["GREY"]="gray" ["YUYV"]="yuyv422")
+
 if [ ! -f jellyfish-10-mbps-hd-h264.mkv ]
 then
 	wget http://jell.yfish.us/media/jellyfish-10-mbps-hd-h264.mkv
@@ -18,25 +21,24 @@ then
 	rm /tmp/tmp
 fi
 
-if [ ! -f images/jelly-1920-1080.GREY ]
-then
-ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt gray -f rawvideo images/jelly-1920-1080.GREY
-fi
+function generate_video {
+	local v4l_fmt=$1
+	local ffmpeg_fmt=${v4l_2_ffmpeg_fmt[$1]}
+	local w=$2
+	local h=$3
 
-if [ ! -f images/jelly-1920-1080.RGB3 ]
-then
-	ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt rgb24 -f rawvideo images/jelly-1920-1080.RGB3
-fi
+	echo "$w $h $v4l_fmt $v4l_ffmpeg"
+	if [ ! -f images/jelly-$w-$h.$v4l_fmt ]
+	then
+	ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -filter:v "crop=$w:$h:0:0" -pix_fmt $ffmpeg_fmt -f rawvideo images/jelly-$w-$h.$v4l_fmt
+	fi
+}
 
-if [ ! -f images/jelly-902-902.RGB3 ]
-then
-	ffmpeg -s 1920x1080 -pix_fmt rgb24 -f rawvideo -i images/jelly-1920-1080.RGB3 -filter:v "crop=902:902:0:0" -pix_fmt rgb24  -f rawvideo images/jelly-902-902.RGB3
-fi
-
-if [ ! -f images/jelly-1920-1080.NV12 ]
-then
-	ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -pix_fmt nv12 -f rawvideo images/jelly-1920-1080.NV12
-fi
+generate_video YU12 802 910
+generate_video GREY 802 910
+generate_video RGB3 802 910
+generate_video YUYV 802 910
+generate_video NV12 802 910
 
 if [ ! -f images/jelly-1920-1080.BA24 ]
 then
@@ -45,7 +47,6 @@ then
 	ffmpeg -pix_fmt rgb24 -s 1920x1080 -f rawvideo  -i tmp1 -pix_fmt rgb24 -s 1920x1080 -f rawvideo  -i tmp2 -filter_complex "[1]format=argb,colorchannelmixer=aa=0.5[front];[0][front]overlay=x=(W-w)/2:y=H-h" -pix_fmt argb -s 1920x1080 -f rawvideo  images/jelly-1920-1080.BA24
 	rm tmp1 tmp2
 fi
-
 
 function codec {
 
@@ -76,44 +77,47 @@ fi
 done
 
 echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
-   case "$format" in
-
-    YU12) ffp=yuv420p ;;
-    RGB3) ffp=rgb24 ;;
-    NV12) ffp=nv12 ;;
-    BA24) ffp=argb ;;
-    GREY) ffp=gray ;;
-    *)    echo "pixelformat should be one of YU12, RGB3, BA24, GREY, NV12"
-          exit 1
-          ;;
-   esac
-
    echo "ffp=$ffp"
 
    v4l2-ctl -d0 --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
-   v4l2-ctl -d1 --set-selection target=compose,width=$cp_w,height=$cp_h -x width=$cr_w,height=$cr_h -v width=$cp_w,height=$cp_h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly_$cr_w-$cr_h-$format.fwht --stream-to out-$cp_w-$cp_h.$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
+   v4l2-ctl -d1 --set-selection target=compose,width=$cp_w,height=$cp_h -x width=$cr_w,height=$cr_h -v width=$cr_w,height=$cr_h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly_$cr_w-$cr_h-$format.fwht --stream-to out-$cp_w-$cp_h.$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
 
-   ffplay -v info -f rawvideo -pixel_format $ffp -video_size "${cp_w}x${cp_h}"  out-$cp_w-$cp_h.$format
+   ffplay -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${cp_w}x${cp_h}"  out-$cp_w-$cp_h.$format
 
 }
 
-if [ "$#" -eq 3 ]; then
-    codec $1 $2 $3
+if [ "$#" -gt 2 ]; then
+    codec $@
 
 elif [ "$#" -eq 0 ]; then
 
-    codec 1920 1080 crop=640x480 GREY
-    codec 1920 1080 crop=860x540 compose=800x500  GREY
-    codec 1920 1080 compose=600x600 GREY
-    codec 1920 1080 GREY
-    codec 1920 1080 BA24
-    codec 1920 1080 NV12
-    codec 902 902 RGB3
+#    codec 1920 1080 crop=640x480 GREY
+#    codec 1920 1080 crop=860x540 compose=860x540  GREY
+    codec 802 910 crop=802x910 YU12
+    codec 802 910 crop=802x910 GREY
+    codec 802 910 crop=802x910 NV12
+    codec 802 910 crop=802x910 YUYV
+    codec 802 910 crop=802x910 RGB3
+    codec 1920 1080 crop=1920x1080 BA24
 
-    codec 1920 1080 RGB3
-    codec 1920 1080 YU12
+#    codec 1920 1080 crop=640x480 RGB3
+#    codec 1920 1080 crop=860x540 compose=860x540  RGB3
+#    codec 1920 1080 compose=1920x1080 RGB3
+#    codec 1920 1080 crop=640x480 YU12
+#    codec 1920 1080 crop=860x540 compose=860x540  YU12
+#    codec 1920 1080 compose=1920x1080 YU12
+
+
+#    codec 1920 1080 crop=860x540 compose=860x540  GREY
+#    codec 1920 1080 compose=640x600 GREY
+#     codec 1920 1080 GREY
+#    codec 1920 1080 NV12
+#    codec 902 902 RGB3
+
+#    codec 1920 1080 RGB3
+#    codec 1920 1080 YU12
 
 else
    echo "usage: [crop-width] [crop-height] [width] [height] [pixelformat]"
