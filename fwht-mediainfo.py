@@ -61,9 +61,6 @@ def main():
 		others = fh.read(16)
 		size = struct.unpack('>L', fh.read(4))[0]
 		print(f'size: {size}')
-		others = fh.read(16)
-		size = struct.unpack('>L', fh.read(4))[0]
-		print(f'size: {size}')
 
 if __name__== "__main__":
 	main()
