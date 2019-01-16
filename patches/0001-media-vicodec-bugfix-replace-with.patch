@@ -1,0 +1,36 @@
+From 6d62edd758f5dc080a691ca8d595c07e69758ec2 Mon Sep 17 00:00:00 2001
+From: Dafna Hirschfeld <dafna3@gmail.com>
+Date: Fri, 14 Dec 2018 04:11:15 -0800
+Subject: [PATCH 1/5] media: vicodec: bugfix - replace '=' with '|='
+
+In the fwht_encode_frame, 'encoding = encode_plane'
+should be replaced with 'encoding |= encode_plane'
+so existing flags won't be overwrriten.
+
+Signed-off-by: Dafna Hirschfeld <dafna3@gmail.com>
+---
+ drivers/media/platform/vicodec/codec-fwht.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/platform/vicodec/codec-fwht.c b/drivers/media/platform/vicodec/codec-fwht.c
+index 5630f1dc45e6..a6fd0477633b 100644
+--- a/drivers/media/platform/vicodec/codec-fwht.c
++++ b/drivers/media/platform/vicodec/codec-fwht.c
+@@ -787,10 +787,10 @@ u32 fwht_encode_frame(struct fwht_raw_frame *frm,
+ 
+ 	if (frm->components_num == 4) {
+ 		rlco_max = rlco + size / 2 - 256;
+-		encoding = encode_plane(frm->alpha, ref_frm->alpha, &rlco,
+-					rlco_max, cf, frm->height, frm->width,
+-					frm->luma_alpha_step,
+-					is_intra, next_is_intra);
++		encoding |= encode_plane(frm->alpha, ref_frm->alpha, &rlco,
++					 rlco_max, cf, frm->height, frm->width,
++					 frm->luma_alpha_step,
++					 is_intra, next_is_intra);
+ 		if (encoding & FWHT_FRAME_UNENCODED)
+ 			encoding |= FWHT_ALPHA_UNENCODED;
+ 		encoding &= ~FWHT_FRAME_UNENCODED;
+-- 
+2.17.1
+

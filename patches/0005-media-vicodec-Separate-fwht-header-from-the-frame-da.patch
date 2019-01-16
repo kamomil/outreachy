@@ -1,0 +1,258 @@
+From cf66a202a78aeb883f92a4745b5367613d79c99e Mon Sep 17 00:00:00 2001
+From: Dafna Hirschfeld <dafna3@gmail.com>
+Date: Wed, 16 Jan 2019 05:55:18 -0800
+Subject: [PATCH 5/5] media: vicodec: Separate fwht header from the frame data
+
+Keep the fwht header in separated field from the data.
+Refactor job_ready to use a new function 'get_next_header'
+
+Signed-off-by: Dafna Hirschfeld <dafna3@gmail.com>
+---
+ .../media/platform/vicodec/codec-v4l2-fwht.c  |  24 ++--
+ .../media/platform/vicodec/codec-v4l2-fwht.h  |   1 +
+ drivers/media/platform/vicodec/vicodec-core.c | 118 ++++++++++--------
+ 3 files changed, 81 insertions(+), 62 deletions(-)
+
+diff --git a/drivers/media/platform/vicodec/codec-v4l2-fwht.c b/drivers/media/platform/vicodec/codec-v4l2-fwht.c
+index 3df51d47674b..3dcf2ed24212 100644
+--- a/drivers/media/platform/vicodec/codec-v4l2-fwht.c
++++ b/drivers/media/platform/vicodec/codec-v4l2-fwht.c
+@@ -234,7 +234,6 @@ int v4l2_fwht_decode(struct v4l2_fwht_state *state, u8 *p_in, u8 *p_out)
+ {
+ 	unsigned int i, j, k;
+ 	u32 flags;
+-	struct fwht_cframe_hdr *p_hdr;
+ 	struct fwht_cframe cf;
+ 	u8 *p, *ref_p;
+ 	unsigned int components_num = 3;
+@@ -246,25 +245,24 @@ int v4l2_fwht_decode(struct v4l2_fwht_state *state, u8 *p_in, u8 *p_out)
+ 		return -EINVAL;
+ 
+ 	info = state->info;
+-	p_hdr = (struct fwht_cframe_hdr *)p_in;
+ 
+-	version = ntohl(p_hdr->version);
++	version = ntohl(state->header.version);
+ 	if (!version || version > FWHT_VERSION) {
+ 		pr_err("version %d is not supported, current version is %d\n",
+ 		       version, FWHT_VERSION);
+ 		return -EINVAL;
+ 	}
+ 
+-	if (p_hdr->magic1 != FWHT_MAGIC1 ||
+-	    p_hdr->magic2 != FWHT_MAGIC2)
++	if (state->header.magic1 != FWHT_MAGIC1 ||
++	    state->header.magic2 != FWHT_MAGIC2)
+ 		return -EINVAL;
+ 
+ 	/* TODO: support resolution changes */
+-	if (ntohl(p_hdr->width)  != state->visible_width ||
+-	    ntohl(p_hdr->height) != state->visible_height)
++	if (ntohl(state->header.width)  != state->visible_width ||
++	    ntohl(state->header.height) != state->visible_height)
+ 		return -EINVAL;
+ 
+-	flags = ntohl(p_hdr->flags);
++	flags = ntohl(state->header.flags);
+ 
+ 	if (version == FWHT_VERSION) {
+ 		u32 pixenc = flags & FWHT_FL_PIXENC_MSK;
+@@ -277,11 +275,11 @@ int v4l2_fwht_decode(struct v4l2_fwht_state *state, u8 *p_in, u8 *p_out)
+ 			return -EINVAL;
+ 	}
+ 
+-	state->colorspace = ntohl(p_hdr->colorspace);
+-	state->xfer_func = ntohl(p_hdr->xfer_func);
+-	state->ycbcr_enc = ntohl(p_hdr->ycbcr_enc);
+-	state->quantization = ntohl(p_hdr->quantization);
+-	cf.rlc_data = (__be16 *)(p_in + sizeof(*p_hdr));
++	state->colorspace = ntohl(state->header.colorspace);
++	state->xfer_func = ntohl(state->header.xfer_func);
++	state->ycbcr_enc = ntohl(state->header.ycbcr_enc);
++	state->quantization = ntohl(state->header.quantization);
++	cf.rlc_data = (__be16 *)p_in;
+ 
+ 	hdr_width_div = (flags & FWHT_FL_CHROMA_FULL_WIDTH) ? 1 : 2;
+ 	hdr_height_div = (flags & FWHT_FL_CHROMA_FULL_HEIGHT) ? 1 : 2;
+diff --git a/drivers/media/platform/vicodec/codec-v4l2-fwht.h b/drivers/media/platform/vicodec/codec-v4l2-fwht.h
+index 5787d4e6822b..1dc5169a14e5 100644
+--- a/drivers/media/platform/vicodec/codec-v4l2-fwht.h
++++ b/drivers/media/platform/vicodec/codec-v4l2-fwht.h
+@@ -41,6 +41,7 @@ struct v4l2_fwht_state {
+ 	enum v4l2_quantization quantization;
+ 
+ 	struct fwht_raw_frame ref_frame;
++	struct fwht_cframe_hdr header;
+ 	u8 *compressed_frame;
+ };
+ 
+diff --git a/drivers/media/platform/vicodec/vicodec-core.c b/drivers/media/platform/vicodec/vicodec-core.c
+index 0df8d3509144..c97300344fbd 100644
+--- a/drivers/media/platform/vicodec/vicodec-core.c
++++ b/drivers/media/platform/vicodec/vicodec-core.c
+@@ -124,6 +124,7 @@ struct vicodec_ctx {
+ 	u32			cur_buf_offset;
+ 	u32			comp_max_size;
+ 	u32			comp_size;
++	u32			header_size;
+ 	u32			comp_magic_cnt;
+ 	u32			comp_frame_size;
+ 	bool			comp_has_frame;
+@@ -201,6 +202,61 @@ static int device_process(struct vicodec_ctx *ctx,
+ /*
+  * mem2mem callbacks
+  */
++enum vb2_buffer_state get_next_header(struct vicodec_ctx *ctx, u8 *p_src,
++				      u32 sz, u8 *header, u8 **pp)
++{
++	static const u8 magic[] = {
++		0x4f, 0x4f, 0x4f, 0x4f, 0xff, 0xff, 0xff, 0xff
++	};
++	u8 *p = *pp;
++	u32 state;
++
++	state = VB2_BUF_STATE_DONE;
++
++	if (!ctx->header_size) {
++		state = VB2_BUF_STATE_ERROR;
++		for (; p < p_src + sz; p++) {
++			u32 copy;
++
++			p = memchr(p, magic[ctx->comp_magic_cnt],
++					p_src + sz - p);
++			if (!p) {
++				ctx->comp_magic_cnt = 0;
++				break;
++			}
++			copy = sizeof(magic) - ctx->comp_magic_cnt;
++			if (p_src + sz - p < copy)
++				copy = p_src + sz - p;
++
++			memcpy(header + ctx->comp_magic_cnt, p, copy);
++			ctx->comp_magic_cnt += copy;
++			if (!memcmp(header, magic, ctx->comp_magic_cnt)) {
++				p += copy;
++				state = VB2_BUF_STATE_DONE;
++				break;
++			}
++			ctx->comp_magic_cnt = 0;
++		}
++		if (ctx->comp_magic_cnt < sizeof(magic)) {
++			*pp = p;
++			return state;
++		}
++		ctx->header_size = sizeof(magic);
++	}
++
++	if (ctx->header_size < sizeof(struct fwht_cframe_hdr)) {
++		u32 copy = sizeof(struct fwht_cframe_hdr) - ctx->header_size;
++
++		if (copy > p_src + sz - p)
++			copy = p_src + sz - p;
++
++		memcpy(header + ctx->header_size, p, copy);
++		p += copy;
++		ctx->header_size += copy;
++	}
++	*pp = p;
++	return state;
++}
+ 
+ /* device_run() - prepares and starts the device */
+ static void device_run(void *priv)
+@@ -241,6 +297,7 @@ static void device_run(void *priv)
+ 	}
+ 	v4l2_m2m_buf_done(dst_buf, state);
+ 	ctx->comp_size = 0;
++	ctx->header_size = 0;
+ 	ctx->comp_magic_cnt = 0;
+ 	ctx->comp_has_frame = false;
+ 	spin_unlock(ctx->lock);
+@@ -291,57 +348,19 @@ static int job_ready(void *priv)
+ 
+ 	state = VB2_BUF_STATE_DONE;
+ 
+-	if (!ctx->comp_size) {
+-		state = VB2_BUF_STATE_ERROR;
+-		for (; p < p_src + sz; p++) {
+-			u32 copy;
++	if (ctx->header_size < sizeof(struct fwht_cframe_hdr))
++		state = get_next_header(ctx, p_src, sz,
++					(u8 *)&ctx->state.header, &p);
++	if (ctx->header_size < sizeof(struct fwht_cframe_hdr)) {
++		job_remove_src_buf(ctx, state);
++		goto restart;
++	}
+ 
+-			p = memchr(p, magic[ctx->comp_magic_cnt],
+-				   p_src + sz - p);
+-			if (!p) {
+-				ctx->comp_magic_cnt = 0;
+-				break;
+-			}
+-			copy = sizeof(magic) - ctx->comp_magic_cnt;
+-			if (p_src + sz - p < copy)
+-				copy = p_src + sz - p;
++	ctx->comp_frame_size = ntohl(ctx->state.header.size);
+ 
+-			memcpy(ctx->state.compressed_frame + ctx->comp_magic_cnt,
+-			       p, copy);
+-			ctx->comp_magic_cnt += copy;
+-			if (!memcmp(ctx->state.compressed_frame, magic,
+-				    ctx->comp_magic_cnt)) {
+-				p += copy;
+-				state = VB2_BUF_STATE_DONE;
+-				break;
+-			}
+-			ctx->comp_magic_cnt = 0;
+-		}
+-		if (ctx->comp_magic_cnt < sizeof(magic)) {
+-			job_remove_src_buf(ctx, state);
+-			goto restart;
+-		}
+-		ctx->comp_size = sizeof(magic);
+-	}
+-	if (ctx->comp_size < sizeof(struct fwht_cframe_hdr)) {
+-		struct fwht_cframe_hdr *p_hdr =
+-			(struct fwht_cframe_hdr *)ctx->state.compressed_frame;
+-		u32 copy = sizeof(struct fwht_cframe_hdr) - ctx->comp_size;
++	if (ctx->comp_frame_size > ctx->comp_max_size)
++		ctx->comp_frame_size = ctx->comp_max_size;
+ 
+-		if (copy > p_src + sz - p)
+-			copy = p_src + sz - p;
+-		memcpy(ctx->state.compressed_frame + ctx->comp_size,
+-		       p, copy);
+-		p += copy;
+-		ctx->comp_size += copy;
+-		if (ctx->comp_size < sizeof(struct fwht_cframe_hdr)) {
+-			job_remove_src_buf(ctx, state);
+-			goto restart;
+-		}
+-		ctx->comp_frame_size = ntohl(p_hdr->size) + sizeof(*p_hdr);
+-		if (ctx->comp_frame_size > ctx->comp_max_size)
+-			ctx->comp_frame_size = ctx->comp_max_size;
+-	}
+ 	if (ctx->comp_size < ctx->comp_frame_size) {
+ 		u32 copy = ctx->comp_frame_size - ctx->comp_size;
+ 
+@@ -1104,7 +1123,7 @@ static int vicodec_start_streaming(struct vb2_queue *q,
+ 		state->stride = q_data->coded_width * info->bytesperline_mult;
+ 	}
+ 	state->ref_frame.luma = kvmalloc(total_planes_size, GFP_KERNEL);
+-	ctx->comp_max_size = total_planes_size + sizeof(struct fwht_cframe_hdr);
++	ctx->comp_max_size = total_planes_size;
+ 	state->compressed_frame = kvmalloc(ctx->comp_max_size, GFP_KERNEL);
+ 	if (!state->ref_frame.luma || !state->compressed_frame) {
+ 		kvfree(state->ref_frame.luma);
+@@ -1131,6 +1150,7 @@ static int vicodec_start_streaming(struct vb2_queue *q,
+ 	state->gop_cnt = 0;
+ 	ctx->cur_buf_offset = 0;
+ 	ctx->comp_size = 0;
++	ctx->header_size = 0;
+ 	ctx->comp_magic_cnt = 0;
+ 	ctx->comp_has_frame = false;
+ 
+-- 
+2.17.1
+
