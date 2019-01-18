@@ -88,9 +88,7 @@ echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
 
 v4l2-ctl -d0 --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
-#   v4l2-ctl -d1 -x width=$cr_w,height=$cr_h -v width=$cr_w,height=$cr_h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly_$cr_w-$cr_h-$format.fwht --stream-to out-$cr_w-$cr_h.$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
-
-v4l2-ctl -d1 -x width=$cr_w,height=$cr_h -v width=$cr_w,height=$cr_h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly_$cr_w-$cr_h-$format.fwht --stream-to out-$cr_w-$cr_h.$format --set-fmt-video-stream pixelformat=$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
+v4l2-ctl -d1 -x width=$cr_w,height=$cr_h -v width=$cr_w,height=$cr_h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly_$cr_w-$cr_h-$format.fwht --stream-to out-$cr_w-$cr_h.$format --stream-pixformat $format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
 
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${cp_w}x${cp_h}"  out-$cp_w-$cp_h.$format
@@ -107,12 +105,12 @@ format=${@:$#}
 cat jelly_$w1-$h1-$format.fwht jelly_$w2-$h2-$format.fwht > jelly-$format-$w1-$h1-to-$w2-$h2.fwht
 cat jelly_$w2-$h2-$format.fwht jelly_$w1-$h1-$format.fwht > jelly-$format-$w2-$h2-to-$w1-$h1.fwht
 
-v4l2-ctl -d1 -x width=$w1,height=$h1 -v width=$w1,height=$h1,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format --set-fmt-video-stream pixelformat=$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
+v4l2-ctl -d1 -x width=$w1,height=$h1 -v width=$w1,height=$h1,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format --stream-pixformat $format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  "out-${w1}-${h1}-to-${w2}-${h2}.$format"
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  "out-${w1}-${h1}-to-${w2}-${h2}.$format.1"
 
-v4l2-ctl -d1 -x width=$w2,height=$h2 -v width=$w2,height=$h2,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w2-$h2-to-$w1-$h1.fwht --stream-to out-$w2-$h2-to-$w1-$h1.$format --set-fmt-video-stream pixelformat=$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
+v4l2-ctl -d1 -x width=$w2,height=$h2 -v width=$w2,height=$h2,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w2-$h2-to-$w1-$h1.fwht --stream-to out-$w2-$h2-to-$w1-$h1.$format --stream-pixformat $format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  "out-${w2}-${h2}-to-${w1}-${h1}.$format"
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  "out-${w2}-${h2}-to-${w1}-${h1}.$format.1"
@@ -128,8 +126,8 @@ elif [ "$#" -eq 0 ]; then
 
 #    codec 1920 1080 crop=640x480 GREY
 #    codec 1920 1080 crop=860x540 compose=860x540  GREY
-#	codec 802 910 crop=802x910 GREY
-#	codec 1002 1010 crop=1002x1010 GREY
+	codec 802 910 crop=802x910 GREY
+	codec 1002 1010 crop=1002x1010 GREY
 	decode_res_change 802 910 1002 1010 GREY
 
 	codec 802 910 crop=802x910 YU12
