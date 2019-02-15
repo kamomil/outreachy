@@ -90,13 +90,14 @@ function codec {
 		fi
 	done
 	D="${@:(-2):1}"
+
 	echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
 	echo "ffp=$ffp"
 	if [ $D = "d0"  ]; then
 		v4l2-ctl -d0 --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
 		nframes=$(grep -ao "OOOO" jelly_$cr_w-$cr_h-$format.fwht | grep wc -l)
-		if [ $nframes != 450 ]; then
+		if [ "$nframes" != 450 ]; then
 			echo "compressed only $nframes instead of 450"
 			exit 1
 		fi
@@ -152,9 +153,14 @@ cat jelly_$w2-$h2-$format.fwht jelly_$w1-$h1-$format.fwht > jelly-$format-$w2-$h
 wmax=$(( w1 > w2 ? w1 : w2 ))
 hmax=$(( h1 > h2 ? h1 : h2 ))
 
-v4l2-ctl -d2 -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format
+D="${@:(-2):1}"
 
-v4l2-ctl -d2 -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w2-$h2-to-$w1-$h1.fwht --stream-to out-$w2-$h2-to-$w1-$h1.$format
+echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
+echo "ffp=$ffp"
+
+v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format
+
+v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w2-$h2-to-$w1-$h1.fwht --stream-to out-$w2-$h2-to-$w1-$h1.$format
 
 echo "heading to out-$w2-$h2.$format.1"
 head -c $(stat --printf="%s" out-$w2-$h2.$format) out-$w2-$h2-to-$w1-$h1.$format > out-$w2-$h2.$format.1
@@ -166,11 +172,25 @@ head -c $(stat --printf="%s" out-$w1-$h1.$format) out-$w1-$h1-to-$w2-$h2.$format
 echo "tailing to out-$w2-$h2.$format.4"
 tail -c $(stat --printf="%s" out-$w2-$h2.$format) out-$w1-$h1-to-$w2-$h2.$format > out-$w2-$h2.$format.4
 
+s1=$(stat --printf="%s" out-$w1-$h1.$format)
+s2=$(stat --printf="%s" out-$w2-$h2.$format)
+s12=$(stat --printf="%s" out-$w1-$h1-to-$w2-$h2.$format)
+s21=$(stat --printf="%s" out-$w2-$h2-to-$w1-$h1.$format)
+
+if [ $(($s1+$s2)) != $s12  ]; then
+	echo "files sizes dont match"
+	exit 1
+fi
+if [ $(($s1+$s2)) != $s21  ]; then
+	echo "files sizes dont match"
+	exit 1
+fi
+
+
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.2
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.3
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.1
 ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.4
-
 
 #ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  "out-${w1}-${h1}-to-${w2}-${h2}.$format.1"
 
@@ -180,6 +200,15 @@ ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$
 rm jelly-$format-$w1-$h1-to-$w2-$h2.fwht
 rm jelly-$format-$w2-$h2-to-$w1-$h1.fwht
 }
+
+if [ $1 == '-h' ] || [ $1 == "--help" ]; then
+	echo "the command gets one param at the time"
+	echo "if no params are added then only stateful decoder runs"
+	echo "if only 'enc' is added then only the encoder runs"
+	echo "if only 'sl-dec' is added then only the stateless decoder runs"
+	echo "in order to encode and decode you should run the command twice"
+	exit 0
+fi
 
 is_enc=${@:$#}
 
@@ -196,44 +225,51 @@ if [ $is_enc == "enc" ]; then
 	codec 1002 1010 crop=1002x1010 d0 NV12
 	codec 802 910 crop=802x910 d0 RGB3
 	codec 1002 1010 crop=1002x1010 d0 RGB3
+	echo "FINISHED ALL ENCODINGS!"
+	exit 0
 fi
 
-echo "FINISHED ALL ENCODINGS!"
+D="d1"
+if [ $is_enc == "sl-dec" ]; then
+	D="d2"
+fi
+	codec 802 910 crop=802x910 $D YUYV
+	codec 802 910 crop=1002x1010 $D YUYV
+	decode_res_change 802 910 1002 1010 $D YUYV
 
-	codec 802 910 crop=802x910 d2 YUYV
-	codec 802 910 crop=1002x1010 d2 YUYV
+	codec 802 910 crop=802x910 $D 422P
+	codec 1002 1010 crop=1002x1010 $D 422P
+	decode_res_change 802 910 1002 1010 $D 422P
 
-	codec 802 910 crop=802x910 d2 422P
-	codec 1002 1010 crop=1002x1010 d2 422P
-	decode_res_change 802 910 1002 1010 422P
+	rm out-*.YUYV*
 
-	codec 802 910 crop=802x910 d2 GREY
-	codec 1002 1010 crop=1002x1010 d2 GREY
-	decode_res_change 802 910 1002 1010 GREY
+	codec 802 910 crop=802x910 $D GREY
+	codec 1002 1010 crop=1002x1010 $D GREY
+	decode_res_change 802 910 1002 1010 $D GREY
 
-	rm out-*.YUYV
-	rm out-*.422P
-	rm out-*.GREY
+	rm out-*.422P*
 
-	codec 802 910 crop=802x910 d2 YU12
-	codec 1002 1010 crop=1002x1010 d2 YU12
-	decode_res_change 802 910 1002 1010 YU12
+	codec 802 910 crop=802x910 $D YU12
+	codec 1002 1010 crop=1002x1010 $D YU12
+	decode_res_change 802 910 1002 1010 $D YU12
 
-	codec 802 910 crop=802x910 d2 NV12
-	codec 1002 1010 crop=1002x1010 d2 NV12
-	decode_res_change 802 910 1002 1010 NV12
+	rm out-*.GREY*
 
+	codec 802 910 crop=802x910 $D NV12
+	codec 1002 1010 crop=1002x1010 $D NV12
+	decode_res_change 802 910 1002 1010 $D NV12
 
-	codec 802 910 crop=802x910 d2 RGB3
-	codec 1002 1010 crop=1002x1010 d2 RGB3
-	decode_res_change 802 910 1002 1010 RGB3
+	rm out-*.YU12*
+
+	codec 802 910 crop=802x910 $D RGB3
+	codec 1002 1010 crop=1002x1010 $D RGB3
+	decode_res_change 802 910 1002 1010 $D RGB3
 
 	codec 802 910 crop=802x910 BA24
 
-	rm out-*.YU12
-	rm out-*.NV12
-	rm out-*.RGB3
-	rm out-*.BA24
+	rm out-*.NV12*
+	rm out-*.RGB3*
+	rm out-*.BA24*
 
 #    codec 1920 1080 crop=640x480 RGB3
 #    codec 1920 1080 crop=860x540 compose=860x540  RGB3
