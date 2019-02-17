@@ -96,7 +96,7 @@ function codec {
 	if [ $D = "d0"  ]; then
 		v4l2-ctl -d0 --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
-		nframes=$(grep -ao "OOOO" jelly_$cr_w-$cr_h-$format.fwht | grep wc -l)
+		nframes=$(grep -ao "OOOO" jelly_$cr_w-$cr_h-$format.fwht | wc -l)
 		if [ "$nframes" != 450 ]; then
 			echo "compressed only $nframes instead of 450"
 			exit 1
