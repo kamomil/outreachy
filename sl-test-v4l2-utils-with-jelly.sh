@@ -2,11 +2,11 @@
 set -x
 
 declare -A v4l_2_ffmpeg_fmt
-v4l_2_ffmpeg_fmt=( ["422P"]="yuv422p" ["YU12"]="yuv420p" ["RGB3"]="rgb24" ["NV12"]="nv12" ["BA24"]="argb" ["GREY"]="gray" ["YUYV"]="yuyv422")
+v4l_2_ffmpeg_fmt=( ["422P"]="yuv422p" ["YU12"]="yuv420p" ["RGB3"]="rgb24" ["NV12"]="nv12" ["BA24"]="argb" ["GREY"]="gray" ["YUYV"]="yuyv422" ["YM24"]="yuv444p")
 declare -A v4l_2_mul
-v4l_2_mul=( ["422P"]="2" ["YU12"]="3" ["RGB3"]="3" ["NV12"]="3" ["BA24"]="4" ["GREY"]="1" ["YUYV"]="2")
+v4l_2_mul=( ["422P"]="2" ["YU12"]="3" ["RGB3"]="3" ["NV12"]="3" ["BA24"]="4" ["GREY"]="1" ["YUYV"]="2" ["NV24"]="3")
 declare -A v4l_2_div
-v4l_2_div=( ["422P"]=1 ["YU12"]=2 ["RGB3"]=1 ["NV12"]=2 ["BA24"]=1 ["GREY"]=1 ["YUYV"]=1)
+v4l_2_div=( ["422P"]=1 ["YU12"]=2 ["RGB3"]=1 ["NV12"]=2 ["BA24"]=1 ["GREY"]=1 ["YUYV"]=1 ["NV24"]="1")
 
 
 if [ ! -d images ]
@@ -26,6 +26,16 @@ then
 	rm /tmp/tmp
 fi
 
+function generate_nv_video {
+	local w=$1
+	local h=$2
+	if [ ! -f images/jelly-$w-$h.NV24 ]
+	then
+	sudo modprobe -v vivid
+	v4l2-ctl -d3 -v width=$w,height=$h,pixelformat=NV24 --stream-mmap --stream-count=450 --stream-to=images/jelly-$w-$h.NV24 --get-fmt-video || { echo 'vivid failed'; exit 1; }
+	fi
+}
+
 function generate_video {
 	local v4l_fmt=$1
 	local ffmpeg_fmt=${v4l_2_ffmpeg_fmt[$1]}
@@ -35,9 +45,14 @@ function generate_video {
 	echo "$w $h $v4l_fmt $v4l_ffmpeg"
 	if [ ! -f images/jelly-$w-$h.$v4l_fmt ]
 	then
-		ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -filter:v "crop=$w:$h:0:0" -pix_fmt $ffmpeg_fmt -f rawvideo images/jelly-$w-$h.$v4l_fmt
+		ffmpeg -s 1920x1080 -pix_fmt yuv420p -f rawvideo -i images/jelly-1920-1080.YU12 -filter:v "crop=$w:$h:0:0" -pix_fmt $ffmpeg_fmt -f rawvideo images/jelly-$w-$h.$v4l_fmt || { echo 'ffmpeg failed' ; exit 1; }
+
 	fi
 }
+generate_nv_video 640 480
+generate_nv_video 1280 720
+
+generate_video YM24 800 800
 generate_video 422P 802 910
 generate_video 422P 1002 1010
 
@@ -121,7 +136,12 @@ function codec {
 			exit 1
 		fi
 
-		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${cp_w}x${cp_h}"  out-$cp_w-$cp_h.$format
+		if [ $format != "NV24" ]; then
+			ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${cp_w}x${cp_h}"  out-$cp_w-$cp_h.$format
+		else
+			qvidcap -W $cp_w -H $cp_h -P NV24 -f out-$cp_w-$cp_h.$format
+		fi
+		#qvidcap  -P $format -W $cp_w -H ${cp_h}  -f out-$cp_w-$cp_h.$format
 
 	fi
 
@@ -186,11 +206,18 @@ if [ $(($s1+$s2)) != $s21  ]; then
 	exit 1
 fi
 
+if [ $format != "NV24" ]; then
 
-ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.2
-ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.3
-ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.1
-ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.4
+	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.2
+	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.3
+	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.1
+	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.4
+else
+	qvidcap -W $w1 -H $h1 -P NV24 -f out-$w1-$h1.$format.2
+	qvidcap -W $w1 -H $h1 -P NV24 -f out-$w1-$h1.$format.3
+	qvidcap -W $w2 -H $h2 -P NV24 -f out-$w2-$h2.$format.1
+	qvidcap -W $w2 -H $h2 -P NV24 -f out-$w2-$h2.$format.4
+fi
 
 #ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  "out-${w1}-${h1}-to-${w2}-${h2}.$format.1"
 
@@ -213,6 +240,8 @@ fi
 is_enc=${@:$#}
 
 if [ $is_enc == "enc" ]; then
+	codec 640 480 crop=640x480 d0 NV24
+	codec 1280 720 crop=1280x720 d0 NV24
 	codec 802 910 crop=802x910 d0 YUYV
 	codec 1002 1010 crop=1002x1010 d0 YUYV
 	codec 802 910 crop=802x910 d0 422P
@@ -233,42 +262,45 @@ D="d1"
 if [ $is_enc == "sl-dec" ]; then
 	D="d2"
 fi
+	codec 640 480 crop=640x480 $D NV24
+	codec 1280 720 crop=1280x720 $D NV24
+	decode_res_change 640 480 1280 720 $D NV24
+	rm out-*.NV24*
+
 	codec 802 910 crop=802x910 $D YUYV
-	codec 802 910 crop=1002x1010 $D YUYV
+	codec 1002 1010 crop=1002x1010 $D YUYV
 	decode_res_change 802 910 1002 1010 $D YUYV
+	rm out-*.YUYV*
 
 	codec 802 910 crop=802x910 $D 422P
 	codec 1002 1010 crop=1002x1010 $D 422P
 	decode_res_change 802 910 1002 1010 $D 422P
-
-	rm out-*.YUYV*
+	rm out-*.422P*
 
 	codec 802 910 crop=802x910 $D GREY
 	codec 1002 1010 crop=1002x1010 $D GREY
 	decode_res_change 802 910 1002 1010 $D GREY
-
-	rm out-*.422P*
+	rm out-*.GREY*
 
 	codec 802 910 crop=802x910 $D YU12
 	codec 1002 1010 crop=1002x1010 $D YU12
 	decode_res_change 802 910 1002 1010 $D YU12
+	rm out-*.YU12*
 
-	rm out-*.GREY*
 
 	codec 802 910 crop=802x910 $D NV12
 	codec 1002 1010 crop=1002x1010 $D NV12
 	decode_res_change 802 910 1002 1010 $D NV12
+	rm out-*.NV12*
 
-	rm out-*.YU12*
 
 	codec 802 910 crop=802x910 $D RGB3
 	codec 1002 1010 crop=1002x1010 $D RGB3
 	decode_res_change 802 910 1002 1010 $D RGB3
+	rm out-*.RGB3*
 
 	codec 802 910 crop=802x910 BA24
 
-	rm out-*.NV12*
-	rm out-*.RGB3*
 	rm out-*.BA24*
 
 #    codec 1920 1080 crop=640x480 RGB3
