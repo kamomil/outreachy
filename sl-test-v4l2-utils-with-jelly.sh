@@ -125,88 +125,154 @@ function codec {
 		#qvidcap  -P $format -W $cp_w -H ${cp_h}  -f out-$cp_w-$cp_h.$format
 
 	fi
-
-
-#echo "ffplay -loglevel warning -v info -f rawvideo -pixel_format '${v4l_2_ffmpeg_fmt[$format]}' -video_size '${cp_w}x${cp_h}'  out-$cp_w-$cp_h.$format" >> to_ffplay.sh
-
 }
+
+function decode_interlived_dims {
+
+	w1=$1
+	h1=$2
+	w2=$3
+	h2=$4
+	format=${@:$#}
+	if [ ! -f jelly_$w1-$h1-$format.fwht ]; then
+		echo jelly_$w1-$h1-$format.fwht does not exist
+		exit 1
+	fi
+	if [ ! -f jelly_$w2-$h2-$format.fwht ]; then
+		echo jelly_$w2-$h2-$format.fwht does not exist
+		exit 1
+	fi
+	wmax=$(( w1 > w2 ? w1 : w2 ))
+	hmax=$(( h1 > h2 ? h1 : h2 ))
+
+	./merge_fwht_frames jelly_$w1-$h1-$format.fwht jelly_$w2-$h2-$format.fwht merge-$format-$w1-$h1-to-$w2-$h2.fwht $wmax $hmax
+
+
+	D="${@:(-2):1}"
+
+	echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
+	echo "ffp=$ffp"
+
+	v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from merge-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-merged-${w1}x${h1}-${w2}x${h2}.$format
+
+	size=$(stat --printf="%s" out-merged-${w1}x${h1}-${w2}x${h2}.$format)
+
+	frm1_sz=$(($w1 * $h1 * ${v4l_2_mul[$format]} / ${v4l_2_div[$format]}))
+	ex_size1=$(($frm1_sz * 450))
+	frm2_sz=$(($w2 * $h2 * ${v4l_2_mul[$format]} / ${v4l_2_div[$format]}))
+	ex_size2=$(($frm2_sz * 450))
+
+	if [ $(($ex_size1 + $ex_size2)) != $size ]; then
+
+		echo "expected size = $ex_size"
+		echo "actual   size = $size"
+		exit 1
+	fi
+	double_frame=$(($frm1_sz + $frm2_sz))
+	i=0
+	rm  out-mrg-$w1-$h1.$format  out-mrg-$w2-$h2.$format
+
+	while [[ $i -le 450 ]]
+	do
+		#dd if=out-merged-${w1}x${h1}-${w2}x${h2}.$format bs=$(($frm1_sz)) skip=$(($i * $double_frame)) count=1 >> out-mrg-$w1-$h1.$format
+		#dd if=out-merged-${w1}x${h1}-${w2}x${h2}.$format bs=$(($frm2_sz)) skip=$(($i * $double_frame + $frm1_sz)) count=1 >> out-mrg-$w2-$h2.$format
+		dd if=out-merged-${w1}x${h1}-${w2}x${h2}.$format obs=$double_frame ibs=$double_frame skip=$i count=1 >> tmp
+		head -c $frm1_sz tmp >> out-mrg-$w1-$h1.$format
+		tail -c $frm2_sz tmp >> out-mrg-$w2-$h2.$format
+		rm tmp
+		i=$(($i + 1))
+	done
+
+
+	if [ $format != "NV24" ]; then
+
+		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-mrg-$w1-$h1.$format
+		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-mrg-$w2-$h2.$format
+	else
+		qvidcap -W $w1 -H $h1 -P NV24 -f out-mrg-$w1-$h1.$format
+		qvidcap -W $w2 -H $h2 -P NV24 -f out-mrg-$w2-$h2.$format
+	fi
+
+	rm  merge-$format-$w1-$h1-to-$w2-$h2.fwht
+}
+
 
 function decode_res_change {
 
-w1=$1
-h1=$2
-w2=$3
-h2=$4
-format=${@:$#}
-if [ ! -f jelly_$w1-$h1-$format.fwht ]; then
-	echo jelly_$w1-$h1-$format.fwht does not exist
-	exit 1
-fi
-if [ ! -f jelly_$w2-$h2-$format.fwht ]; then
-	echo jelly_$w2-$h2-$format.fwht does not exist
-	exit 1
-fi
-cat jelly_$w1-$h1-$format.fwht jelly_$w2-$h2-$format.fwht > jelly-$format-$w1-$h1-to-$w2-$h2.fwht
-cat jelly_$w2-$h2-$format.fwht jelly_$w1-$h1-$format.fwht > jelly-$format-$w2-$h2-to-$w1-$h1.fwht
+	w1=$1
+	h1=$2
+	w2=$3
+	h2=$4
+	format=${@:$#}
+	if [ ! -f jelly_$w1-$h1-$format.fwht ]; then
+		echo jelly_$w1-$h1-$format.fwht does not exist
+		exit 1
+	fi
+	if [ ! -f jelly_$w2-$h2-$format.fwht ]; then
+		echo jelly_$w2-$h2-$format.fwht does not exist
+		exit 1
+	fi
+	cat jelly_$w1-$h1-$format.fwht jelly_$w2-$h2-$format.fwht > jelly-$format-$w1-$h1-to-$w2-$h2.fwht
+	cat jelly_$w2-$h2-$format.fwht jelly_$w1-$h1-$format.fwht > jelly-$format-$w2-$h2-to-$w1-$h1.fwht
 
 #v4l2-ctl -d1 -x width=$w1,height=$h1 -v width=$w1,height=$h1,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format || { echo 'v4l2-ctl -d1 failed' ; exit 1; }
 
-wmax=$(( w1 > w2 ? w1 : w2 ))
-hmax=$(( h1 > h2 ? h1 : h2 ))
+	wmax=$(( w1 > w2 ? w1 : w2 ))
+	hmax=$(( h1 > h2 ? h1 : h2 ))
 
-D="${@:(-2):1}"
+	D="${@:(-2):1}"
 
-echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
-echo "ffp=$ffp"
+	echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
+	echo "ffp=$ffp"
 
-v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format
+	v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w1-$h1-to-$w2-$h2.fwht --stream-to out-$w1-$h1-to-$w2-$h2.$format
 
-v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w2-$h2-to-$w1-$h1.fwht --stream-to out-$w2-$h2-to-$w1-$h1.$format
+	v4l2-ctl -${D} -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from jelly-$format-$w2-$h2-to-$w1-$h1.fwht --stream-to out-$w2-$h2-to-$w1-$h1.$format
 
-echo "heading to out-$w2-$h2.$format.1"
-head -c $(stat --printf="%s" out-$w2-$h2.$format) out-$w2-$h2-to-$w1-$h1.$format > out-$w2-$h2.$format.1
-echo "tailing to out-$w1-$h1.$format.2"
-tail -c $(stat --printf="%s" out-$w1-$h1.$format) out-$w2-$h2-to-$w1-$h1.$format > out-$w1-$h1.$format.2
+	echo "heading to out-$w2-$h2.$format.1"
+	head -c $(stat --printf="%s" out-$w2-$h2.$format) out-$w2-$h2-to-$w1-$h1.$format > out-$w2-$h2.$format.1
+	echo "tailing to out-$w1-$h1.$format.2"
+	tail -c $(stat --printf="%s" out-$w1-$h1.$format) out-$w2-$h2-to-$w1-$h1.$format > out-$w1-$h1.$format.2
 
-echo "heading to out-$w1-$h1.$format.3"
-head -c $(stat --printf="%s" out-$w1-$h1.$format) out-$w1-$h1-to-$w2-$h2.$format > out-$w1-$h1.$format.3
-echo "tailing to out-$w2-$h2.$format.4"
-tail -c $(stat --printf="%s" out-$w2-$h2.$format) out-$w1-$h1-to-$w2-$h2.$format > out-$w2-$h2.$format.4
+	echo "heading to out-$w1-$h1.$format.3"
+	head -c $(stat --printf="%s" out-$w1-$h1.$format) out-$w1-$h1-to-$w2-$h2.$format > out-$w1-$h1.$format.3
+	echo "tailing to out-$w2-$h2.$format.4"
+	tail -c $(stat --printf="%s" out-$w2-$h2.$format) out-$w1-$h1-to-$w2-$h2.$format > out-$w2-$h2.$format.4
 
-s1=$(stat --printf="%s" out-$w1-$h1.$format)
-s2=$(stat --printf="%s" out-$w2-$h2.$format)
-s12=$(stat --printf="%s" out-$w1-$h1-to-$w2-$h2.$format)
-s21=$(stat --printf="%s" out-$w2-$h2-to-$w1-$h1.$format)
+	s1=$(stat --printf="%s" out-$w1-$h1.$format)
+	s2=$(stat --printf="%s" out-$w2-$h2.$format)
+	s12=$(stat --printf="%s" out-$w1-$h1-to-$w2-$h2.$format)
+	s21=$(stat --printf="%s" out-$w2-$h2-to-$w1-$h1.$format)
 
-if [ $(($s1+$s2)) != $s12  ]; then
-	echo "files sizes dont match"
-	exit 1
-fi
-if [ $(($s1+$s2)) != $s21  ]; then
-	echo "files sizes dont match"
-	exit 1
-fi
+	if [ $(($s1+$s2)) != $s12  ]; then
+		echo "files sizes dont match"
+		exit 1
+	fi
+	if [ $(($s1+$s2)) != $s21  ]; then
+		echo "files sizes dont match"
+		exit 1
+	fi
 
-if [ $format != "NV24" ]; then
+	if [ $format != "NV24" ]; then
 
-	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.2
-	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.3
-	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.1
-	ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.4
-else
-	qvidcap -W $w1 -H $h1 -P NV24 -f out-$w1-$h1.$format.2
-	qvidcap -W $w1 -H $h1 -P NV24 -f out-$w1-$h1.$format.3
-	qvidcap -W $w2 -H $h2 -P NV24 -f out-$w2-$h2.$format.1
-	qvidcap -W $w2 -H $h2 -P NV24 -f out-$w2-$h2.$format.4
-fi
+		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.2
+		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  out-$w1-$h1.$format.3
+		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.1
+		ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  out-$w2-$h2.$format.4
+	else
+		qvidcap -W $w1 -H $h1 -P NV24 -f out-$w1-$h1.$format.2
+		qvidcap -W $w1 -H $h1 -P NV24 -f out-$w1-$h1.$format.3
+		qvidcap -W $w2 -H $h2 -P NV24 -f out-$w2-$h2.$format.1
+		qvidcap -W $w2 -H $h2 -P NV24 -f out-$w2-$h2.$format.4
+	fi
 
 #ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  "out-${w1}-${h1}-to-${w2}-${h2}.$format.1"
 
 #ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w2}x${h2}"  "out-${w2}-${h2}-to-${w1}-${h1}.$format"
 #ffplay -loglevel warning -v info -f rawvideo -pixel_format "${v4l_2_ffmpeg_fmt[$format]}" -video_size "${w1}x${h1}"  "out-${w2}-${h2}-to-${w1}-${h1}.$format.1"
 
-rm jelly-$format-$w1-$h1-to-$w2-$h2.fwht
-rm jelly-$format-$w2-$h2-to-$w1-$h1.fwht
+	rm jelly-$format-$w1-$h1-to-$w2-$h2.fwht
+	rm jelly-$format-$w2-$h2-to-$w1-$h1.fwht
 }
 
 if [ $1 == '-h' ] || [ $1 == "--help" ]; then
@@ -266,7 +332,7 @@ if [ $CODEC == "enc" ]; then
 	codec 640 480 crop=640x480 d0 NV24
 	codec 1280 720 crop=1280x720 d0 NV24
 	generate_video YUYV $W1 $H1
-	codec $W1 $H1 crop=$W1x${H1} d0 YUYV
+	codec $W1 $H1 crop=${W1}x${H1} d0 YUYV
 	generate_video YUYV $W2 $H2
 	codec $W2 $H2 crop=${W2}x${H2} d0 YUYV
 	generate_video 422P $W1 $H1
@@ -297,8 +363,10 @@ D="d1"
 if [ $CODEC == "sl-dec" ]; then
 	D="d2"
 fi
-	codec 640 480 crop=640x480 $D NV24
-	codec 1280 720 crop=1280x720 $D NV24
+#	codec 640 480 crop=640x480 $D NV24
+#	codec 1280 720 crop=1280x720 $D NV24
+	decode_interlived_dims 640 480 1280 720 $D NV24
+	exit 1
 	decode_res_change 640 480 1280 720 $D NV24
 	rm out-*.NV24*
 

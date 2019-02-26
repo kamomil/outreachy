@@ -9,6 +9,9 @@
 typedef unsigned int __be32;
 typedef unsigned int u32;
 
+#define MAX_HEIGHT		2160U
+#define MAX_WIDTH		4096U
+
 struct fwht_cframe_hdr {
         u32 magic1;
         u32 magic2;
@@ -53,7 +56,7 @@ int main(int argc, char **argv) {
 	int i = 0;
 
 	if(argc < 5) {
-		printf("uage: %s <fwht file 1> <fwht file 2> <fwht to file> <width> <height>\n", argv[0]);
+		printf("uage: %s <fwht file 1> <fwht file 2> <fwht to file> <max width> <max height>\n", argv[0]);
 		_exit(1);
 	}
 
