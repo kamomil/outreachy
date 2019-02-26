@@ -49,25 +49,6 @@ function generate_video {
 
 	fi
 }
-generate_nv_video 640 480
-generate_nv_video 1280 720
-
-generate_video YM24 800 800
-generate_video 422P 802 910
-generate_video 422P 1002 1010
-
-generate_video YUYV 802 910
-generate_video YUYV 1002 1010
-generate_video YU12 802 910
-generate_video YU12 1002 1010
-generate_video GREY 802 910
-generate_video GREY 1002 1010
-generate_video RGB3 802 910
-generate_video RGB3 1002 1010
-generate_video NV12 802 910
-generate_video NV12 1002 1010
-generate_video BA24 802 910
-generate_video BA24 1002 1010
 
 if [ ! -f images/jelly-1920-1080.BA24 ]
 then
@@ -236,30 +217,84 @@ if [ $1 == '-h' ] || [ $1 == "--help" ]; then
 	echo "in order to encode and decode you should run the command twice"
 	exit 0
 fi
+while [[ $# -gt 0 ]]
+do
+key="$1"
 
-is_enc=${@:$#}
+	case $key in
+	-c|--codec)
+	CODEC="$2"
+	shift # past argument
+	shift # past value
+	;;
+	-w1|--width1)
+	W1="$2"
+	shift # past argument
+	shift # past value
+	;;
+	-w2|--width2)
+	W2="$2"
+	shift # past argument
+	shift # past value
+	;;
+	-h1|--height1)
+	H1="$2"
+	shift # past argument
+	shift # past value
+	;;
+	-h2|--height2)
+	H2="$2"
+	shift # past argument
+	shift # past value
+	;;
+#    --default)
+#    DEFAULT=YES
+#    shift # past argument
+#    ;;
+	*)    # unknown option
+	echo "invalid arg: $key"
+	exit 1
+	;;
+esac
+done
 
-if [ $is_enc == "enc" ]; then
+generate_nv_video 640 480
+generate_nv_video 1280 720
+
+
+if [ $CODEC == "enc" ]; then
 	codec 640 480 crop=640x480 d0 NV24
 	codec 1280 720 crop=1280x720 d0 NV24
-	codec 802 910 crop=802x910 d0 YUYV
-	codec 1002 1010 crop=1002x1010 d0 YUYV
-	codec 802 910 crop=802x910 d0 422P
-	codec 1002 1010 crop=1002x1010 d0 422P
-	codec 802 910 crop=802x910 d0 GREY
-	codec 1002 1010 crop=1002x1010 d0 GREY
-	codec 802 910 crop=802x910 d0 YU12
-	codec 1002 1010 crop=1002x1010 d0 YU12
-	codec 802 910 crop=802x910 d0 NV12
-	codec 1002 1010 crop=1002x1010 d0 NV12
-	codec 802 910 crop=802x910 d0 RGB3
-	codec 1002 1010 crop=1002x1010 d0 RGB3
+	generate_video YUYV $W1 $H1
+	codec $W1 $H1 crop=$W1x${H1} d0 YUYV
+	generate_video YUYV $W2 $H2
+	codec $W2 $H2 crop=${W2}x${H2} d0 YUYV
+	generate_video 422P $W1 $H1
+	codec $W1 $H1 crop=${W1}x${H1} d0 422P
+	generate_video 422P $W2 $H2
+	codec $W2 $H2 crop=${W2}x${H2} d0 422P
+	generate_video GREY $W1 $H1
+	codec $W1 $H1 crop=${W1}x${H1} d0 GREY
+	generate_video GREY $W2 $H2
+	codec $W2 $H2 crop=${W2}x${H2} d0 GREY
+	generate_video YU12 $W1 $H1
+	codec $W1 $H1 crop=${W1}x${H1} d0 YU12
+	generate_video YU12 $W2 $H2
+	codec $W2 $H2 crop=${W2}x${H2} d0 YU12
+	generate_video NV12 $W1 $H1
+	codec $W1 $H1 crop=${W1}x${H1} d0 NV12
+	generate_video NV12 $W2 $H2
+	codec $W2 $H2 crop=${W2}x${H2} d0 NV12
+	generate_video RGB3 $W1 $H1
+	codec $W1 $H1 crop=${W1}x${H1} d0 RGB3
+	generate_video RGB3 $W2 $H2
+	codec $W2 $H2 crop=${W2}x${H2} d0 RGB3
 	echo "FINISHED ALL ENCODINGS!"
 	exit 0
 fi
 
 D="d1"
-if [ $is_enc == "sl-dec" ]; then
+if [ $CODEC == "sl-dec" ]; then
 	D="d2"
 fi
 	codec 640 480 crop=640x480 $D NV24
@@ -267,39 +302,39 @@ fi
 	decode_res_change 640 480 1280 720 $D NV24
 	rm out-*.NV24*
 
-	codec 802 910 crop=802x910 $D YUYV
-	codec 1002 1010 crop=1002x1010 $D YUYV
-	decode_res_change 802 910 1002 1010 $D YUYV
+	codec $W1 $H1 crop=${W1}x${H1} $D YUYV
+	codec $W2 $H2 crop=${W2}x${H2} $D YUYV
+	decode_res_change $W1 $H1 $W2 $H2 $D YUYV
 	rm out-*.YUYV*
 
-	codec 802 910 crop=802x910 $D 422P
-	codec 1002 1010 crop=1002x1010 $D 422P
-	decode_res_change 802 910 1002 1010 $D 422P
+	codec $W1 $H1 crop=${W1}x${H1} $D 422P
+	codec $W2 $H2 crop=${W2}x${H2} $D 422P
+	decode_res_change $W1 $H1 $W2 $H2 $D 422P
 	rm out-*.422P*
 
-	codec 802 910 crop=802x910 $D GREY
-	codec 1002 1010 crop=1002x1010 $D GREY
-	decode_res_change 802 910 1002 1010 $D GREY
+	codec $W1 $H1 crop=${W1}x${H1} $D GREY
+	codec $W2 $H2 crop=${W2}x${H2} $D GREY
+	decode_res_change $W1 $H1 $W2 $H2 $D GREY
 	rm out-*.GREY*
 
-	codec 802 910 crop=802x910 $D YU12
-	codec 1002 1010 crop=1002x1010 $D YU12
-	decode_res_change 802 910 1002 1010 $D YU12
+	codec $W1 $H1 crop=${W1}x${H1} $D YU12
+	codec $W2 $H2 crop=${W2}x${H2} $D YU12
+	decode_res_change $W1 $H1 $W2 $H2 $D YU12
 	rm out-*.YU12*
 
 
-	codec 802 910 crop=802x910 $D NV12
-	codec 1002 1010 crop=1002x1010 $D NV12
-	decode_res_change 802 910 1002 1010 $D NV12
+	codec $W1 $H1 crop=${W1}x${H1} $D NV12
+	codec $W2 $H2 crop=${W2}x${H2} $D NV12
+	decode_res_change $W1 $H1 $W2 $H2 $D NV12
 	rm out-*.NV12*
 
 
-	codec 802 910 crop=802x910 $D RGB3
-	codec 1002 1010 crop=1002x1010 $D RGB3
-	decode_res_change 802 910 1002 1010 $D RGB3
+	codec $W1 $H1 crop=${W1}x${H1} $D RGB3
+	codec $W2 $H2 crop=${W2}x${H2} $D RGB3
+	decode_res_change $W1 $H1 $W2 $H2 $D RGB3
 	rm out-*.RGB3*
 
-	codec 802 910 crop=802x910 BA24
+	codec $W1 $H1 crop=${W1}x${H1} BA24
 
 	rm out-*.BA24*
 
