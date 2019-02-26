@@ -87,11 +87,11 @@ function codec {
 	cp_w=$1
 	cp_h=$2
 	for var in "${@:3:2}"
-	do
+    do
 		target=${var%=*}
 		dim=${var#*=}
 		t_w=${dim%x*}
-		t_h=${dim#*x}
+        t_h=${dim#*x}
 
 		if [ $target = "crop" ]; then
 			cr_w=$t_w
