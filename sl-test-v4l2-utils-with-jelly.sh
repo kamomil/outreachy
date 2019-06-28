@@ -89,8 +89,8 @@ function codec {
 
 	echo "w=$w h=$h cr_w=$cr_w cr_h=$cr_h cp_w=$cp_w cp_h=$cp_h format=$format"
 	echo "ffp=$ffp"
-	if [ $D = "d0"  ]; then
-		v4l2-ctl -d0 --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
+	if [ $D == "d0" ] || [ $D == "d3" ]; then
+		v4l2-ctl "-${D}" --set-selection-output target=crop,width=$cr_w,height=$cr_h   -x width=$w,height=$h,pixelformat=$format --stream-mmap --stream-out-mmap --stream-to jelly_$cr_w-$cr_h-$format.fwht --stream-from images/jelly-$w-$h.$format || { echo 'v4l2-ctl -d0 failed' ; exit 1; }
 
 		nframes=$(grep -ao "OOOO" jelly_$cr_w-$cr_h-$format.fwht | wc -l)
 		if [ "$nframes" != 450 ]; then
@@ -275,11 +275,11 @@ function decode_res_change {
 	rm jelly-$format-$w2-$h2-to-$w1-$h1.fwht
 }
 
-if [ $1 == '-h' ] || [ $1 == "--help" ]; then
-	echo "the command gets one param at the time"
-	echo "if no params are added then only stateful decoder runs"
-	echo "if only 'enc' is added then only the encoder runs"
-	echo "if only 'sl-dec' is added then only the stateless decoder runs"
+if [ "$1" == '-h' ] || [ "$1" == "--help" ]; then
+	echo "usage: $0 -c <codec> -w1 <width 1> -h1 <height 1> -w2 <width 1> -h2 <height 2>"
+	echo "codec is one of {dec,sl-dec,enc,sl-enc}"
+	echo "'dec/sl-dec for stateful/stateless decoder"
+	echo "'enc/sl-enc for stateful/stateless encoder"
 	echo "in order to encode and decode you should run the command twice"
 	exit 0
 fi
@@ -328,50 +328,48 @@ generate_nv_video 640 480
 generate_nv_video 1280 720
 
 
-if [ $CODEC == "enc" ]; then
-	codec 640 480 crop=640x480 d0 NV24
-	codec 1280 720 crop=1280x720 d0 NV24
+if [ "$CODEC" == "enc" ] || [ "$CODEC" == "sl-enc" ]; then
+	D="d0"
+	if [ "$CODEC" == "sl-enc" ]; then
+		D="d2"
+	fi
 	generate_video YUYV $W1 $H1
-	codec $W1 $H1 crop=${W1}x${H1} d0 YUYV
+	codec $W1 $H1 crop=${W1}x${H1} $D YUYV
 	generate_video YUYV $W2 $H2
-	codec $W2 $H2 crop=${W2}x${H2} d0 YUYV
+	codec $W2 $H2 crop=${W2}x${H2} $D YUYV
 	generate_video 422P $W1 $H1
-	codec $W1 $H1 crop=${W1}x${H1} d0 422P
+	codec $W1 $H1 crop=${W1}x${H1} $D 422P
 	generate_video 422P $W2 $H2
-	codec $W2 $H2 crop=${W2}x${H2} d0 422P
+	codec $W2 $H2 crop=${W2}x${H2} $D 422P
 	generate_video GREY $W1 $H1
-	codec $W1 $H1 crop=${W1}x${H1} d0 GREY
+	codec $W1 $H1 crop=${W1}x${H1} $D GREY
 	generate_video GREY $W2 $H2
-	codec $W2 $H2 crop=${W2}x${H2} d0 GREY
+	codec $W2 $H2 crop=${W2}x${H2} $D GREY
 	generate_video YU12 $W1 $H1
-	codec $W1 $H1 crop=${W1}x${H1} d0 YU12
+	codec $W1 $H1 crop=${W1}x${H1} $D YU12
 	generate_video YU12 $W2 $H2
-	codec $W2 $H2 crop=${W2}x${H2} d0 YU12
+	codec $W2 $H2 crop=${W2}x${H2} $D YU12
 	generate_video NV12 $W1 $H1
-	codec $W1 $H1 crop=${W1}x${H1} d0 NV12
+	codec $W1 $H1 crop=${W1}x${H1} $D NV12
 	generate_video NV12 $W2 $H2
-	codec $W2 $H2 crop=${W2}x${H2} d0 NV12
+	codec $W2 $H2 crop=${W2}x${H2} $D NV12
 	generate_video RGB3 $W1 $H1
-	codec $W1 $H1 crop=${W1}x${H1} d0 RGB3
+	codec $W1 $H1 crop=${W1}x${H1} $D RGB3
 	generate_video RGB3 $W2 $H2
-	codec $W2 $H2 crop=${W2}x${H2} d0 RGB3
+	codec $W2 $H2 crop=${W2}x${H2} $D RGB3
+	codec 640 480 crop=640x480 $D NV24
+	codec 1280 720 crop=1280x720 $D NV24
 	echo "FINISHED ALL ENCODINGS!"
 	exit 0
 fi
 
 D="d1"
-if [ $CODEC == "sl-dec" ]; then
-	D="d2"
+if [ "$CODEC" == "sl-dec" ]; then
+	D="d3"
 fi
-#	codec 640 480 crop=640x480 $D NV24
-#	codec 1280 720 crop=1280x720 $D NV24
-	decode_interlived_dims 640 480 1280 720 $D NV24
-	exit 1
-	decode_res_change 640 480 1280 720 $D NV24
-	rm out-*.NV24*
-
 	codec $W1 $H1 crop=${W1}x${H1} $D YUYV
 	codec $W2 $H2 crop=${W2}x${H2} $D YUYV
+	#decode_interlived_dims $W1 $H1 $W2 $H2 $D YUYV
 	decode_res_change $W1 $H1 $W2 $H2 $D YUYV
 	rm out-*.YUYV*
 
@@ -401,6 +399,13 @@ fi
 	codec $W2 $H2 crop=${W2}x${H2} $D RGB3
 	decode_res_change $W1 $H1 $W2 $H2 $D RGB3
 	rm out-*.RGB3*
+
+	codec 640 480 crop=640x480 $D NV24
+	codec 1280 720 crop=1280x720 $D NV24
+	decode_interlived_dims 640 480 1280 720 $D NV24
+	decode_res_change 640 480 1280 720 $D NV24
+	rm out-*.NV24*
+
 
 	codec $W1 $H1 crop=${W1}x${H1} BA24
 
