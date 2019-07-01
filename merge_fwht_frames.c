@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
 	int i = 0;
 
 	if(argc < 5) {
-		printf("uage: %s <fwht file 1> <fwht file 2> <fwht to file> <max width> <max height>\n", argv[0]);
+		printf("usage: %s <fwht file 1> <fwht file 2> <fwht to file> <max width> <max height>\n", argv[0]);
 		_exit(1);
 	}
 
