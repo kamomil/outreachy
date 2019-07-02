@@ -1,8 +1,9 @@
 #!/bin/bash
 
-if [ "$#" -ne 5 ]; then
-	echo "usage: $0 <format> <width 1> <height 1> <width 2> <height 2>"
-	echo "format should be one of YU12 RGB3 GREY 422P"
+if [ "$#" -lt 5 ]; then
+	echo "usage: $0 <format> <width 1> <height 1> <width 2> <height 2> [<decoder>]"
+	echo "<format> should be one of YU12 RGB3 GREY 422P"
+	echo "<decoder> should be one of stateful or stateless (default is stateless)"
 	echo "usage example:"
 	echo "$0 GREY 700 1000 800 900"
 	exit 0
@@ -58,6 +59,8 @@ echo "encoder is exposed in /dev/video$enc_idx"
 echo "stateless decoder is exposed in /dev/video$dec_less_idx"
 echo "stateful decoder is exposed in /dev/video$dec_ful_idx"
 
+rm *.fwht out-*
+
 dec_idx=$dec_less_idx
 
 function initiate_images_dir {
@@ -107,6 +110,12 @@ gcc merge_fwht_frames.c -o merge_fwht_frames
 
 echo "merging the files"
 ./merge_fwht_frames jelly_$w1-$h1-$format.fwht jelly_$w2-$h2-$format.fwht merged-dim.fwht $wmax $hmax
+
+if [[ "$6" == "stateful" ]]; then
+	echo "using stateful decoder"
+	dec_idx=$dec_ful_idx
+fi
+
 
 echo "decoding with the stateless decoder into out-$wmax-$hmax.$format"
 v4l2-ctl -d${dec_idx} --set-ctrl video_gop_size=1 -x width=$wmax,height=$hmax -v width=$wmax,height=$hmax,pixelformat=$format --stream-mmap --stream-out-mmap --stream-from merged-dim.fwht --stream-to out-$wmax-$hmax.$format
