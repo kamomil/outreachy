@@ -23,6 +23,7 @@ v4l_2_mul=( ["422P"]="2" ["YU12"]="3" ["RGB3"]="3" ["NV12"]="3" ["BA24"]="4" ["G
 declare -A v4l_2_div
 v4l_2_div=( ["422P"]=1 ["YU12"]=2 ["RGB3"]=1 ["NV12"]=2 ["BA24"]=1 ["GREY"]=1 ["YUYV"]=1)
 
+echo "modprobing vicodec - need sudo permissions for that"
 sudo modprobe vicodec -v
 
 i=0
@@ -112,14 +113,14 @@ ex_size2=$(($frm2_sz * 450))
 
 if [ $(($ex_size1 + $ex_size2)) != $size ]; then
 
-        echo "worng size"
-        echo "actual   size = $size"
+        echo "wrong size"
+        echo "actual size = $size"
         exit 1
 fi
 
 double_frame=$(($frm1_sz + $frm2_sz))
 
-echo "spliting back the file..."
+echo "splitting back the file..."
 i=0
 while [[ $i -le 450 ]]
 do

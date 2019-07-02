@@ -41,7 +41,6 @@ int read_fwht_frame(unsigned char *buf, int fd)
 		printf("error 1\n");
 		return -1;
 	}
-	printf("frame is %u\n", ntohl(h->size));
 	ssize_t sz2 = read(fd, buf + sz1, ntohl(h->size));
 	if (sz2 < ntohl(h->size)) {
 		printf("error 2\n");
