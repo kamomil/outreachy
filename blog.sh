@@ -1,8 +1,9 @@
 #!/bin/bash
 
 if [ "$#" -ne 5 ]; then
-	echo "usage: $0 <format> <width 1> <height 1> <width 2> -h2 <height 2>"
-	echo "format should be one of YU12 RGB3 GREY 422P, usage example:"
+	echo "usage: $0 <format> <width 1> <height 1> <width 2> <height 2>"
+	echo "format should be one of YU12 RGB3 GREY 422P"
+	echo "usage example:"
 	echo "$0 GREY 700 1000 800 900"
 	exit 0
 fi
