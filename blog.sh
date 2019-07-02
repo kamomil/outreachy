@@ -2,7 +2,7 @@
 
 if [ "$#" -lt 5 ]; then
 	echo "usage: $0 <format> <width 1> <height 1> <width 2> <height 2> [<decoder>]"
-	echo "<format> should be one of YU12 RGB3 GREY 422P"
+	echo "<format> should be one of YU12 RGB3 GREY 422P YUYV"
 	echo "<decoder> should be one of stateful or stateless (default is stateless)"
 	echo "usage example:"
 	echo "$0 GREY 700 1000 800 900"
