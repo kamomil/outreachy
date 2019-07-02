@@ -29,7 +29,8 @@ sudo modprobe vicodec -v
 i=0
 c=0
 enc_idx=0
-dec_idx=0
+dec_less_idx=0
+dec_ful_idx=0
 
 while [[ $i -le 6 ]]
 do
@@ -38,19 +39,26 @@ do
 		c=$(($c + 1))
 	fi
 	if [ "$(v4l2-ctl -d${i} --all 2>/dev/null | grep stateless-decoder-source -o)" == "stateless-decoder-source" ]; then
-		dec_idx=$i
+		dec_less_idx=$i
+		c=$(($c + 1))
+	fi
+	if [ "$(v4l2-ctl -d${i} --all 2>/dev/null | grep stateful-decoder-source -o)" == "stateful-decoder-source" ]; then
+		dec_ful_idx=$i
 		c=$(($c + 1))
 	fi
 	i=$(($i + 1))
 done
 
-if [[ $c -ne 2 ]]; then
+if [[ $c -ne 3 ]]; then
 	echo "could not find vicodec's pseudo files"
 	exit 1
 fi
 
-echo "encoder is exposed in /dev/vicodec$enc_idx"
-echo "decoder is exposed in /dev/vicodec$dec_idx"
+echo "encoder is exposed in /dev/video$enc_idx"
+echo "stateless decoder is exposed in /dev/video$dec_less_idx"
+echo "stateful decoder is exposed in /dev/video$dec_ful_idx"
+
+dec_idx=$dec_less_idx
 
 function initiate_images_dir {
 	if [ ! -d images ]
@@ -113,9 +121,9 @@ ex_size2=$(($frm2_sz * 450))
 
 if [ $(($ex_size1 + $ex_size2)) != $size ]; then
 
-        echo "wrong size"
-        echo "actual size = $size"
-        exit 1
+	echo "wrong size"
+	echo "actual size = $size"
+	exit 1
 fi
 
 double_frame=$(($frm1_sz + $frm2_sz))
